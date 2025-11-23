@@ -33,7 +33,7 @@ const COLL_CURRENT = 'stranger-phoning-team-v2';
 const COLL_HISTORY = 'stranger-phoning-history';
 
 // --- ASSETS ---
-const SPLASH_IMAGE_URL = "https://cdn.discordapp.com/attachments/1442142804544454748/1442250474442063902/IMG_1057.jpg?ex=6924bfec&is=69236e6c&hm=2e4500e8ff51822be8088777c704675756171d3d0b560ead4e53531d3cea34af&;
+const SPLASH_IMAGE_URL = "https://cdn.discordapp.com/attachments/1442142804544454748/1442250474442063902/IMG_1057.jpg?ex=6924bfec&is=69236e6c&hm=2e4500e8ff51822be8088777c704675756171d3d0b560ead4e53531d3cea34af&";
 const INTRO_VIDEO_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1441718480696246293/aHR0cHM6Ly9hc3NldHMueC5haS91c2Vycy80ODc2Y2Y1Yi0zMGU4LTQ3YTUtOTExNS0xOTMyMDhmN2Q1MTcvZ2VuZXJhdGVkL2I5NGMwOTdlLTc5MTktNDg2YS05NjBhLWExOTZkZGQwN2YxMC9nZW5lcmF0ZWRfdmlkZW8ubXA0.mov?ex=692421f7&is=6922d077&hm=90b3bdde0f66249650494cde6bf9193efa26c7171befb02fe5f5de63088a7168&";
 const BACKGROUND_MUSIC_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1442069978101583872/strangersthings.mp3?ex=692417d3&is=6922c653&hm=5e33346aa7ce1d08ab23e603d94527946aea3be5d22e112adcafc981af938de9&";
 const BACKGROUND_MAIN_URL = "https://cdn.discordapp.com/attachments/1442142804544454748/1442232053394313296/Strangerthings_fond.jpg?ex=6924aec4&is=69235d44&hm=4daaa5089352d8b9cdce7beb12e9df281045296c24f0f4d72c738cc009ccfb1a&";
