@@ -3,7 +3,7 @@ import {
   Phone, Plus, Volume2, VolumeX, Crown, Trophy, Monitor, 
   ArrowLeft, LogOut, Star, Calendar, Archive, 
   History, SkipForward, AlertCircle, Trash2, Music, Ghost, MessageSquare, 
-  Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText
+  Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText, CalendarCheck, ChevronLeft
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -157,17 +157,11 @@ const playSound = (type, muted) => {
         setTimeout(() => simpleTone(300, 0.2, 'sawtooth'), 150);
     }
     else if (type === 'levelUp') {
-        // SON LEVEL UP "MARIO STYLE" (Arpège montant joyeux)
         const notes = [
-             {f: 392.00, d: 0.08}, // G4
-             {f: 523.25, d: 0.08}, // C5
-             {f: 659.25, d: 0.08}, // E5
-             {f: 783.99, d: 0.08}, // G5
-             {f: 1046.50, d: 0.08}, // C6
-             {f: 1318.51, d: 0.08}, // E6
-             {f: 1567.98, d: 0.3},  // G6 (Long)
+             {f: 392.00, d: 0.08}, {f: 523.25, d: 0.08}, {f: 659.25, d: 0.08}, 
+             {f: 783.99, d: 0.08}, {f: 1046.50, d: 0.08}, {f: 1318.51, d: 0.08}, 
+             {f: 1567.98, d: 0.3},
         ];
-        
         let time = now;
         notes.forEach(n => {
              const osc2 = ctx.createOscillator();
@@ -220,7 +214,6 @@ const LevelUpOverlay = ({ levelName, levelNum }) => {
     return (
         <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center animate-in zoom-in duration-500 pointer-events-none">
             <div className="relative flex flex-col items-center">
-                {/* Étoiles animées */}
                 <div className="flex gap-2 mb-6">
                     <Star size={40} className="text-yellow-400 animate-bounce delay-0" fill="currentColor" />
                     <Star size={56} className="text-yellow-300 animate-bounce delay-100" fill="currentColor" />
@@ -232,14 +225,12 @@ const LevelUpOverlay = ({ levelName, levelNum }) => {
                 </h1>
                 
                 <div className="flex items-center gap-6 justify-center">
-                    {/* Avatar avec lunettes (seed spécifique) */}
                     <div className="relative w-32 h-32">
                         <img 
                             src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=Agent&backgroundColor=transparent`} 
                             alt="Level Up Avatar" 
                             className="w-full h-full rounded-full border-4 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.6)] bg-slate-800"
                         />
-                        {/* Bulle de dialogue */}
                         <div className="absolute -top-10 -right-24 bg-white text-black font-black p-3 rounded-xl border-4 border-black whitespace-nowrap animate-bounce z-50">
                             Tu es au top !
                             <div className="absolute bottom-[-10px] left-4 w-4 h-4 bg-white border-r-4 border-b-4 border-black transform rotate-45"></div>
@@ -262,9 +253,7 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
   const [activeTab, setActiveTab] = useState('J1');
   const [notes, setNotes] = useState(initialData || { J1: '', J2: '', J3: '' });
   const [isSaving, setIsSaving] = useState(false);
-  const [mode, setMode] = useState('notes'); // 'notes' ou 'search'
-  
-  // SIRET SEARCH STATES
+  const [mode, setMode] = useState('notes'); 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -305,15 +294,12 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
   const handleSiretSearch = async (e) => {
       e.preventDefault();
       if (!searchQuery.trim()) return;
-      
       setIsSearching(true);
       setSearchResult(null);
       playSound('scan', false);
-
       try {
           const response = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&page=1&per_page=1`);
           const data = await response.json();
-          
           if (data.results && data.results.length > 0) {
               setSearchResult(data.results[0]);
           } else {
@@ -335,10 +321,8 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
         boxShadow: `0 0 20px ${themeStyle.text}40`
       }}
     >
-      {/* HEADER */}
       <div className="h-8 bg-black/50 flex justify-between items-center px-2 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-2">
-            {/* BOUTON MODE DÉTECTIVE (GAUCHE) */}
             <button 
                 onClick={() => { setMode(mode === 'notes' ? 'search' : 'notes'); playSound('click', false); }}
                 className={`flex items-center justify-center w-6 h-6 rounded hover:bg-white/20 transition-colors ${mode === 'search' ? 'bg-white/20 text-white' : 'text-slate-400'}`}
@@ -346,15 +330,12 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
             >
                 <Search size={14} />
             </button>
-            
-            {/* TEXTE D'AIDE AJOUTÉ ICI */}
             {mode === 'notes' && (
                 <span className="text-[10px] uppercase font-bold opacity-50 animate-pulse ml-1" style={{color: themeStyle.text}}>
                     ← clique sur la loupe
                 </span>
             )}
         </div>
-
         <div className="flex items-center gap-2">
             {canCustomize && mode === 'notes' && (
             <button onClick={cycleTheme} className="text-[10px] uppercase font-bold text-white bg-white/20 px-2 py-1 rounded hover:bg-white/30 flex items-center gap-1">
@@ -368,140 +349,56 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
             )}
         </div>
       </div>
-      
-      {/* TABS (Only in Notes Mode) */}
       {mode === 'notes' && (
         <div className="flex bg-black/20 shrink-0">
             {['J1', 'J2', 'J3'].map(tab => (
-            <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-2 font-bold text-xs border-r border-white/10 transition-all ${activeTab === tab ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
-                style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}
-            >
-                {tab}
-            </button>
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-2 font-bold text-xs border-r border-white/10 transition-all ${activeTab === tab ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`} style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}>{tab}</button>
             ))}
         </div>
       )}
-
-      {/* CONTENT */}
       <div className="flex-1 relative p-4 overflow-hidden flex flex-col">
         {mode === 'notes' ? (
             <>
-                <textarea
-                value={notes[activeTab] || ''}
-                onChange={handleNoteChange}
-                placeholder={`// Notes du ${activeTab}...`}
-                className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px] font-bold"
-                style={{ 
-                    fontFamily: "'Courier New', Courier, monospace",
-                    color: themeStyle.text,
-                    textShadow: `0 0 2px ${themeStyle.text}40`
-                }}
-                />
-                <div className="absolute bottom-2 right-2 text-[10px] font-bold uppercase flex items-center gap-1">
-                {isSaving ? <span className="animate-pulse opacity-50" style={{color: themeStyle.text}}>...</span> : <span className="flex items-center gap-1 opacity-70" style={{color: themeStyle.text}}><Save size={10}/></span>}
-                </div>
+                <textarea value={notes[activeTab] || ''} onChange={handleNoteChange} placeholder={`// Notes du ${activeTab}...`} className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px] font-bold" style={{ fontFamily: "'Courier New', Courier, monospace", color: themeStyle.text, textShadow: `0 0 2px ${themeStyle.text}40` }} />
+                <div className="absolute bottom-2 right-2 text-[10px] font-bold uppercase flex items-center gap-1">{isSaving ? <span className="animate-pulse opacity-50" style={{color: themeStyle.text}}>...</span> : <span className="flex items-center gap-1 opacity-70" style={{color: themeStyle.text}}><Save size={10}/></span>}</div>
             </>
         ) : (
             <div className="w-full h-full flex flex-col animate-in fade-in slide-in-from-left-4" style={{color: themeStyle.text}}>
-                <h3 className="text-xs font-black uppercase border-b border-current pb-2 mb-4 flex items-center gap-2 opacity-70">
-                    <FileText size={14}/> DOSSIER D'ENQUÊTE
-                </h3>
-                
+                <h3 className="text-xs font-black uppercase border-b border-current pb-2 mb-4 flex items-center gap-2 opacity-70"><FileText size={14}/> DOSSIER D'ENQUÊTE</h3>
                 <form onSubmit={handleSiretSearch} className="flex gap-2 mb-4 shrink-0">
-                    <input 
-                        type="text" 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="SIRET ou NOM..."
-                        className="flex-1 bg-black/20 border border-current/30 rounded p-2 text-sm font-mono focus:outline-none focus:border-current uppercase"
-                        style={{color: themeStyle.text}}
-                    />
-                    <button type="submit" disabled={isSearching} className="px-3 py-2 bg-black/30 border border-current/30 rounded hover:bg-black/50">
-                        {isSearching ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <Search size={16}/>}
-                    </button>
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="SIRET ou NOM..." className="flex-1 bg-black/20 border border-current/30 rounded p-2 text-sm font-mono focus:outline-none focus:border-current uppercase" style={{color: themeStyle.text}} />
+                    <button type="submit" disabled={isSearching} className="px-3 py-2 bg-black/30 border border-current/30 rounded hover:bg-black/50">{isSearching ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <Search size={16}/>}</button>
                 </form>
-
                 <div className="flex-1 overflow-y-auto text-xs font-mono space-y-2 pr-1 custom-scrollbar">
-                    <style>{`
-                        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-                        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
-                    `}</style>
-
+                    <style>{`.custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }`}</style>
                     {searchResult === 'not_found' && <div className="opacity-50 italic text-center py-4">⚠️ CIBLE INTROUVABLE</div>}
                     {searchResult === 'error' && <div className="text-red-400 font-bold text-center py-4">ERREUR DE LIAISON SATELLITE</div>}
-                    
                     {searchResult && typeof searchResult === 'object' && (
                         <div className="space-y-4 pb-4">
                             <div className="border-2 border-dashed border-current/30 p-3 bg-black/10 relative">
                                 <div className="absolute -top-2 -left-2 text-[40px] opacity-10 pointer-events-none rotate-12 font-black">CONFIDENTIEL</div>
-                                
-                                {/* EN-TÊTE ENTREPRISE */}
                                 <div className="mb-4 pb-2 border-b border-current/20">
                                     <div className="opacity-50 text-[9px] uppercase tracking-widest mb-1">CIBLE PRINCIPALE</div>
                                     <div className="font-black text-base uppercase leading-tight">{searchResult.nom_complet}</div>
-                                    <div className="flex items-center gap-1 mt-1 opacity-70 text-[10px]">
-                                        <Building size={10} /> SIRET: {searchResult.siege?.siret}
-                                    </div>
+                                    <div className="flex items-center gap-1 mt-1 opacity-70 text-[10px]"><Building size={10} /> SIRET: {searchResult.siege?.siret}</div>
                                 </div>
-
-                                {/* ADRESSE */}
                                 <div className="mb-3">
-                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold">
-                                        <MapPin size={10} /> LOCALISATION
-                                    </div>
-                                    <div className="pl-3 border-l-2 border-current/30">
-                                        {searchResult.siege?.adresse}
-                                    </div>
+                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold"><MapPin size={10} /> LOCALISATION</div>
+                                    <div className="pl-3 border-l-2 border-current/30">{searchResult.siege?.adresse}</div>
                                 </div>
-
-                                {/* DIRIGEANTS */}
                                 <div className="mb-3">
-                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold">
-                                        <User size={10} /> DIRECTION
-                                    </div>
-                                    <div className="pl-3 border-l-2 border-current/30">
-                                        {searchResult.dirigeants && searchResult.dirigeants.length > 0 ? (
-                                            searchResult.dirigeants.map((d, i) => (
-                                                <div key={i} className="uppercase">{d.prenoms} {d.nom} <span className="opacity-50 text-[9px]">({d.qualite})</span></div>
-                                            ))
-                                        ) : (
-                                            <div className="italic opacity-50">Donnée non publique</div>
-                                        )}
-                                    </div>
+                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold"><User size={10} /> DIRECTION</div>
+                                    <div className="pl-3 border-l-2 border-current/30">{searchResult.dirigeants && searchResult.dirigeants.length > 0 ? (searchResult.dirigeants.map((d, i) => (<div key={i} className="uppercase">{d.prenoms} {d.nom} <span className="opacity-50 text-[9px]">({d.qualite})</span></div>))) : (<div className="italic opacity-50">Donnée non publique</div>)}</div>
                                 </div>
-
-                                {/* CHIFFRES (CA & SALARIÉS) */}
                                 <div className="grid grid-cols-2 gap-2">
-                                    <div className="bg-black/20 p-2 rounded">
-                                        <div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1"><Users size={8}/> EFFECTIF</div>
-                                        <div className="font-bold">{searchResult.tranche_effectif_salarie ? searchResult.tranche_effectif_salarie + " Salariés" : "N/A"}</div>
-                                    </div>
-                                    <div className="bg-black/20 p-2 rounded border border-red-900/30 relative overflow-hidden">
-                                        <div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1 text-red-400"><DollarSign size={8}/> C.A.</div>
-                                        <div className="font-black text-red-500 text-xs tracking-widest">CLASSIFIÉ</div>
-                                        <div className="absolute top-0 right-0 bottom-0 left-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-10"></div>
-                                    </div>
+                                    <div className="bg-black/20 p-2 rounded"><div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1"><Users size={8}/> EFFECTIF</div><div className="font-bold">{searchResult.tranche_effectif_salarie ? searchResult.tranche_effectif_salarie + " Salariés" : "N/A"}</div></div>
+                                    <div className="bg-black/20 p-2 rounded border border-red-900/30 relative overflow-hidden"><div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1 text-red-400"><DollarSign size={8}/> C.A.</div><div className="font-black text-red-500 text-xs tracking-widest">CLASSIFIÉ</div><div className="absolute top-0 right-0 bottom-0 left-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-10"></div></div>
                                 </div>
-
-                                {/* META */}
-                                <div className="mt-3 pt-2 border-t border-dashed border-current/30 text-[9px] flex justify-between opacity-50">
-                                    <span>STATUT: {searchResult.etat_administratif === 'A' ? 'ACTIF' : 'INACTIF'}</span>
-                                    <span>CRÉATION: {searchResult.date_creation}</span>
-                                </div>
+                                <div className="mt-3 pt-2 border-t border-dashed border-current/30 text-[9px] flex justify-between opacity-50"><span>STATUT: {searchResult.etat_administratif === 'A' ? 'ACTIF' : 'INACTIF'}</span><span>CRÉATION: {searchResult.date_creation}</span></div>
                             </div>
                         </div>
                     )}
-                    
-                    {!searchResult && !isSearching && (
-                        <div className="opacity-30 text-center mt-10 flex flex-col items-center gap-2">
-                            <Search size={32} className="animate-pulse"/>
-                            <p>En attente de saisie...</p>
-                        </div>
-                    )}
+                    {!searchResult && !isSearching && (<div className="opacity-30 text-center mt-10 flex flex-col items-center gap-2"><Search size={32} className="animate-pulse"/><p>En attente de saisie...</p></div>)}
                 </div>
             </div>
         )}
@@ -519,26 +416,18 @@ const ChatSystem = ({ myName, myId }) => {
   const lastMsgIdRef = useRef(null);
   const isOpenRef = useRef(isOpen); 
 
-  useEffect(() => {
-    isOpenRef.current = isOpen;
-    if (isOpen) {
-        setHasUnread(false);
-    }
-  }, [isOpen]);
+  useEffect(() => { isOpenRef.current = isOpen; if (isOpen) { setHasUnread(false); } }, [isOpen]);
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), orderBy('timestamp', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse();
       setMessages(msgs);
-      
       if (msgs.length > 0) {
           const latest = msgs[msgs.length - 1];
           if (lastMsgIdRef.current && lastMsgIdRef.current !== latest.id) {
               playSound('message', false);
-              if (!isOpenRef.current) {
-                  setHasUnread(true);
-              }
+              if (!isOpenRef.current) { setHasUnread(true); }
           }
           lastMsgIdRef.current = latest.id;
       }
@@ -551,34 +440,16 @@ const ChatSystem = ({ myName, myId }) => {
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), {
-      text: inputText.trim(), senderName: myName, senderId: myId, timestamp: Date.now()
-    });
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), { text: inputText.trim(), senderName: myName, senderId: myId, timestamp: Date.now() });
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { lastActive: Date.now() });
     setInputText('');
   };
 
   if (!isOpen) return (
-    <button 
-        onClick={() => setIsOpen(true)} 
-        className="fixed bottom-24 right-4 z-[60] transition-transform hover:scale-110 active:scale-95 focus:outline-none"
-    >
-      {/* CONTAINER DU TALKIE SANS CADRE - JUSTE L'ICONE AVEC EFFET */}
+    <button onClick={() => setIsOpen(true)} className="fixed bottom-24 right-4 z-[60] transition-transform hover:scale-110 active:scale-95 focus:outline-none">
       <div className={`relative transition-all duration-500 ${hasUnread ? 'animate-bounce' : ''}`}>
-        <WalkieTalkieIcon 
-            className={`w-16 h-24 md:w-20 md:h-28 drop-shadow-2xl filter transition-all duration-500
-            ${hasUnread 
-                ? 'text-green-500 drop-shadow-[0_0_20px_rgba(74,222,128,0.9)]' 
-                : 'text-red-700 drop-shadow-[0_0_15px_rgba(185,28,28,0.6)]'}`}
-        />
-        
-        {/* INDICATEUR NON LU (LED QUI CLIGNOTE) */}
-        {hasUnread && (
-            <span className="absolute -top-2 -right-2 flex h-6 w-6">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-6 w-6 bg-green-500 border-2 border-black"></span>
-            </span>
-        )}
+        <WalkieTalkieIcon className={`w-16 h-24 md:w-20 md:h-28 drop-shadow-2xl filter transition-all duration-500 ${hasUnread ? 'text-green-500 drop-shadow-[0_0_20px_rgba(74,222,128,0.9)]' : 'text-red-700 drop-shadow-[0_0_15px_rgba(185,28,28,0.6)]'}`} />
+        {hasUnread && (<span className="absolute -top-2 -right-2 flex h-6 w-6"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-6 w-6 bg-green-500 border-2 border-black"></span></span>)}
       </div>
     </button>
   );
@@ -586,23 +457,14 @@ const ChatSystem = ({ myName, myId }) => {
   return (
     <div className="fixed bottom-20 right-4 z-[60] w-80 md:w-96 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-t-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
       <div className="bg-slate-900 p-3 border-b border-slate-700 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-            <WalkieTalkieIcon className="w-5 h-5 text-slate-400"/>
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            <span className="text-xs font-mono uppercase text-slate-300">CHANNEL 4</span>
-        </div>
+        <div className="flex items-center gap-2"><WalkieTalkieIcon className="w-5 h-5 text-slate-400"/><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div><span className="text-xs font-mono uppercase text-slate-300">CHANNEL 4</span></div>
         <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white"><Minimize2 size={18} /></button>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-700">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-3 ${msg.senderId === myId ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className="w-8 h-8 rounded border border-slate-700 bg-slate-800 overflow-hidden shrink-0">
-              <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(msg.senderName)}`} className="w-full h-full object-cover" />
-            </div>
-            <div className={`flex flex-col max-w-[75%] ${msg.senderId === myId ? 'items-end' : 'items-start'}`}>
-              <span className="text-[10px] text-slate-500 uppercase font-bold mb-1">{msg.senderName}</span>
-              <div className={`p-2 rounded-lg text-sm font-mono break-words ${msg.senderId === myId ? 'bg-red-900/40 text-red-100 border border-red-800' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>{msg.text}</div>
-            </div>
+            <div className="w-8 h-8 rounded border border-slate-700 bg-slate-800 overflow-hidden shrink-0"><img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(msg.senderName)}`} className="w-full h-full object-cover" /></div>
+            <div className={`flex flex-col max-w-[75%] ${msg.senderId === myId ? 'items-end' : 'items-start'}`}><span className="text-[10px] text-slate-500 uppercase font-bold mb-1">{msg.senderName}</span><div className={`p-2 rounded-lg text-sm font-mono break-words ${msg.senderId === myId ? 'bg-red-900/40 text-red-100 border border-red-800' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>{msg.text}</div></div>
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -619,42 +481,12 @@ const CarAnimationOverlay = ({ name }) => {
     if (!name) return null;
     return (
         <div className="fixed bottom-10 left-[-200px] z-[9999] animate-drive-by pointer-events-none">
-            <style>{`
-                @keyframes driveBy {
-                    0% { transform: translateX(0); }
-                    100% { transform: translateX(120vw); }
-                }
-                .animate-drive-by {
-                    animation: driveBy 4s linear forwards;
-                }
-            `}</style>
+            <style>{`@keyframes driveBy { 0% { transform: translateX(0); } 100% { transform: translateX(120vw); } } .animate-drive-by { animation: driveBy 4s linear forwards; }`}</style>
             <div className="relative">
-                {/* Bubble Speech */}
-                <div className="absolute -top-16 left-10 bg-white text-black font-black italic px-4 py-2 rounded-xl border-4 border-black whitespace-nowrap animate-bounce">
-                    GO GO GO !
-                    <div className="absolute bottom-[-10px] left-4 w-4 h-4 bg-white border-r-4 border-b-4 border-black transform rotate-45"></div>
-                </div>
-                
-                {/* Avatar */}
-                <div className="absolute -top-8 left-4 w-16 h-16 rounded-full border-2 border-black overflow-hidden bg-slate-800 z-0">
-                    <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(name)}`} className="w-full h-full object-cover" />
-                </div>
-
-                {/* Car Body (Pixel Art style with CSS) */}
-                <div className="relative z-10">
-                    <div className="w-32 h-12 bg-red-600 rounded-t-xl border-4 border-black flex items-center justify-center">
-                        <div className="text-white font-bold text-xs uppercase tracking-widest">TURBO</div>
-                    </div>
-                    <div className="absolute -bottom-4 left-2 w-8 h-8 bg-black rounded-full border-4 border-gray-600 animate-spin"></div>
-                    <div className="absolute -bottom-4 right-2 w-8 h-8 bg-black rounded-full border-4 border-gray-600 animate-spin"></div>
-                </div>
-                
-                {/* Motion Lines */}
-                <div className="absolute top-4 -left-10 flex flex-col gap-2">
-                     <div className="w-8 h-1 bg-white opacity-50"></div>
-                     <div className="w-12 h-1 bg-white opacity-50"></div>
-                     <div className="w-6 h-1 bg-white opacity-50"></div>
-                </div>
+                <div className="absolute -top-16 left-10 bg-white text-black font-black italic px-4 py-2 rounded-xl border-4 border-black whitespace-nowrap animate-bounce">GO GO GO !<div className="absolute bottom-[-10px] left-4 w-4 h-4 bg-white border-r-4 border-b-4 border-black transform rotate-45"></div></div>
+                <div className="absolute -top-8 left-4 w-16 h-16 rounded-full border-2 border-black overflow-hidden bg-slate-800 z-0"><img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(name)}`} className="w-full h-full object-cover" /></div>
+                <div className="relative z-10"><div className="w-32 h-12 bg-red-600 rounded-t-xl border-4 border-black flex items-center justify-center"><div className="text-white font-bold text-xs uppercase tracking-widest">TURBO</div></div><div className="absolute -bottom-4 left-2 w-8 h-8 bg-black rounded-full border-4 border-gray-600 animate-spin"></div><div className="absolute -bottom-4 right-2 w-8 h-8 bg-black rounded-full border-4 border-gray-600 animate-spin"></div></div>
+                <div className="absolute top-4 -left-10 flex flex-col gap-2"><div className="w-8 h-1 bg-white opacity-50"></div><div className="w-12 h-1 bg-white opacity-50"></div><div className="w-6 h-1 bg-white opacity-50"></div></div>
             </div>
         </div>
     );
@@ -867,6 +699,9 @@ export default function StrangerPhoningUltimate() {
   const [levelUpNotification, setLevelUpNotification] = useState(null);
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [powerNotification, setPowerNotification] = useState(null);
+  const [showArchives, setShowArchives] = useState(false);
+  const [selectedArchive, setSelectedArchive] = useState(null); // NEW: Selected Archive
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const isMutedRef = useRef(isMuted);
   const prevStatsRef = useRef({});
@@ -892,6 +727,15 @@ export default function StrangerPhoningUltimate() {
     const savedId = localStorage.getItem('stranger_player_id');
     if (savedId) setMyPlayerId(savedId);
   }, []);
+
+  useEffect(() => {
+    if (showArchives) {
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_HISTORY), orderBy('archivedAt', 'desc'), limit(20));
+        getDocs(q).then(snap => {
+            setHistoryList(snap.docs.map(d => ({id: d.id, ...d.data()})));
+        });
+    }
+  }, [showArchives]);
 
   useEffect(() => {
     if (!user) return;
@@ -1159,6 +1003,101 @@ export default function StrangerPhoningUltimate() {
           </div>
       )}
 
+      {/* ARCHIVES MODAL - LIST & DETAIL VIEW */}
+      {showArchives && (
+          <div className="fixed inset-0 z-[90] bg-black/95 flex flex-col items-center justify-center p-4">
+              <div className="bg-slate-900 w-full max-w-2xl max-h-[80vh] rounded-2xl border-2 border-slate-700 flex flex-col overflow-hidden">
+                  <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                          <History /> {selectedArchive ? selectedArchive.dateLabel : 'ARCHIVES'}
+                      </h3>
+                      <div className="flex gap-2">
+                          {selectedArchive && (
+                              <button onClick={() => setSelectedArchive(null)} className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-bold flex items-center gap-1 border border-slate-500">
+                                  <ChevronLeft size={14}/> RETOUR
+                              </button>
+                          )}
+                          <button onClick={() => {setShowArchives(false); setSelectedArchive(null);}} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><Minimize2 size={20}/></button>
+                      </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                      {!selectedArchive ? (
+                          // VUE LISTE
+                          historyList.length === 0 ? <div className="text-center text-slate-500 italic py-10">Aucune archive trouvée.</div> : 
+                          historyList.map((h) => (
+                              <div key={h.id} onClick={() => setSelectedArchive(h)} className="bg-slate-950 p-4 rounded-lg border border-slate-800 flex justify-between items-center cursor-pointer hover:bg-slate-900 transition-colors group">
+                                  <div>
+                                      <div className="text-white font-bold group-hover:text-yellow-400 transition-colors">{h.dateLabel}</div>
+                                      <div className="text-xs text-slate-500">{new Date(h.archivedAt).toLocaleTimeString()} • {h.players?.length || 0} Joueurs</div>
+                                  </div>
+                                  <div className="text-right">
+                                      <div className="text-sm font-mono text-green-400">Appels: {h.players?.reduce((a,c)=>a+(c.calls||0),0) || 0}</div>
+                                      <div className="text-sm font-mono text-red-400">RDV: {h.players?.reduce((a,c)=>a+(c.rdvs||0),0) || 0}</div>
+                                  </div>
+                              </div>
+                          ))
+                      ) : (
+                          // VUE DÉTAIL
+                          <div className="space-y-2">
+                              <div className="grid grid-cols-12 text-xs text-slate-500 uppercase font-bold px-4 mb-2 border-b border-slate-800 pb-2">
+                                  <div className="col-span-1 text-center">#</div>
+                                  <div className="col-span-7">Agent</div>
+                                  <div className="col-span-2 text-center">Appels</div>
+                                  <div className="col-span-2 text-right">RDV</div>
+                              </div>
+                              {selectedArchive.players
+                                  ?.sort((a, b) => (b.rdvs || 0) - (a.rdvs || 0) || (b.calls || 0) - (a.calls || 0))
+                                  .map((p, i) => (
+                                  <div key={i} className="grid grid-cols-12 items-center p-3 bg-slate-800/50 rounded border border-slate-700/50 hover:bg-slate-800 transition-colors">
+                                      <div className="col-span-1 flex justify-center">
+                                        <div className={`w-6 h-6 flex items-center justify-center font-black text-xs rounded ${i===0 ? 'bg-yellow-500 text-black' : (i===1 ? 'bg-slate-400 text-black' : (i===2 ? 'bg-orange-700 text-white' : 'bg-slate-900 text-slate-500'))}`}>
+                                            {i+1}
+                                        </div>
+                                      </div>
+                                      <div className="col-span-7 min-w-0 pl-2">
+                                          <div className="font-bold text-white truncate text-sm">{p.name}</div>
+                                          <div className="text-[9px] text-slate-500 uppercase">LVL {getLevelInfo(p.lifetimeRdvs).lvl} • {getLevelInfo(p.lifetimeRdvs).name}</div>
+                                      </div>
+                                      <div className="col-span-2 text-center font-mono text-blue-400 font-bold text-sm">{p.calls || 0}</div>
+                                      <div className="col-span-2 text-right font-mono text-red-500 font-bold text-lg pr-2">{p.rdvs || 0}</div>
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* LEADERBOARD MODAL */}
+      {showLeaderboard && (
+          <div className="fixed inset-0 z-[90] bg-black/95 flex flex-col items-center justify-center p-4">
+              <div className="bg-slate-900 w-full max-w-md max-h-[80vh] rounded-2xl border-2 border-yellow-600 flex flex-col overflow-hidden shadow-[0_0_50px_rgba(202,138,4,0.3)]">
+                  <div className="p-4 border-b border-yellow-600/30 flex justify-between items-center bg-slate-900">
+                      <h3 className="text-xl font-black text-yellow-500 flex items-center gap-2 uppercase tracking-wider"><Trophy /> CLASSEMENT</h3>
+                      <button onClick={() => setShowLeaderboard(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><Minimize2 size={20}/></button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                      {collaborators.map((c, i) => (
+                          <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg mb-2 ${c.id === myPlayerId ? 'bg-yellow-900/20 border border-yellow-700/50' : 'bg-slate-800/50 border border-slate-700/50'}`}>
+                              <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center font-black text-lg rounded ${i===0 ? 'bg-yellow-500 text-black' : (i===1 ? 'bg-slate-400 text-black' : (i===2 ? 'bg-orange-700 text-white' : 'bg-slate-800 text-slate-500'))}`}>
+                                  {i+1}
+                              </div>
+                              <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(c.avatarSeed || c.name)}&backgroundColor=transparent`} className="w-8 h-8 rounded border border-slate-600 bg-slate-700" />
+                              <div className="flex-1 min-w-0">
+                                  <div className={`font-bold truncate ${c.id === myPlayerId ? 'text-yellow-400' : 'text-slate-200'}`}>{c.name}</div>
+                                  <div className="text-[10px] text-slate-500 uppercase">{getLevelInfo(c.lifetimeRdvs).name}</div>
+                              </div>
+                              <div className="text-right">
+                                  <div className="font-mono font-bold text-white">{c.rdvs} <span className="text-[10px] text-slate-500">RDV</span></div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* --- VIEWS --- */}
       {viewMode === 'splash' && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden">
@@ -1190,14 +1129,15 @@ export default function StrangerPhoningUltimate() {
           </div>
           <div className="fixed bottom-6 right-6 flex gap-3 z-50 bg-slate-950/90 p-3 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur">
             <button onClick={() => setIsUpsideDown(!isUpsideDown)} className="p-3 rounded-xl border bg-slate-900 border-slate-700"><Ghost size={24}/></button>
+            <button onClick={() => setShowArchives(true)} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white"><History size={20}/></button>
             <button onClick={() => setViewMode('splash')} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400"><LogOut size={20}/></button>
-            {!showResetConfirm ? (<button onClick={() => setShowResetConfirm(true)} className="p-3 rounded-xl bg-slate-900 border border-red-900/50 text-red-500"><Archive size={20}/></button>) : (<button onClick={async () => {
+            {!showResetConfirm ? (<button onClick={() => setShowResetConfirm(true)} className="p-3 rounded-xl bg-slate-900 border border-red-900/50 text-red-500 hover:bg-red-900/20"><CalendarCheck size={20}/></button>) : (<button onClick={async () => {
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_HISTORY), { dateLabel: new Date().toLocaleDateString(), archivedAt: Date.now(), players: collaborators });
                 const batch = writeBatch(db);
                 (await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT)))).forEach(d => batch.update(d.ref, { calls: 0, rdvs: 0, powersUsed: 0 }));
                 await batch.commit();
                 setShowResetConfirm(false);
-            }} className="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-xs">CONFIRMER FIN JOURNÉE</button>)}
+            }} className="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-xs animate-pulse">CONFIRMER CLÔTURE</button>)}
             <button onClick={() => setIsMusicMuted(!isMusicMuted)} className={`p-3 rounded-xl border ${isMusicMuted ? 'text-slate-500' : 'text-blue-400'}`}><Music size={20}/></button>
           </div>
         </div>
@@ -1239,6 +1179,7 @@ export default function StrangerPhoningUltimate() {
       {viewMode === 'player' && (
         <div className="min-h-screen flex flex-col p-4 pb-24 relative">
           <div className="absolute top-4 right-4 z-50 flex gap-2">
+              <button onClick={() => setShowLeaderboard(true)} className="p-3 rounded-full border bg-slate-900 border-yellow-600 text-yellow-500 hover:bg-yellow-900/50"><Trophy size={28} /></button>
               <button onClick={() => {localStorage.removeItem('stranger_player_id'); setMyPlayerId(null); setViewMode('setup');}} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400 hover:text-red-500"><LogOut size={28} /></button>
           </div>
           <h1 className="text-3xl font-black text-red-600 mb-8 text-center w-full" style={{fontFamily: 'serif'}}>STRANGER PHONING</h1>
