@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Phone, Plus, Volume2, VolumeX, Activity, Crown, Trophy, Monitor, 
-  ArrowLeft, LogOut, Star, Calendar, ChevronDown, ChevronUp, Archive, 
-  History, SkipForward, AlertCircle, Trash2, Music, Megaphone, Ghost, X, Check 
+  Phone, Plus, Volume2, VolumeX, Crown, Trophy, Monitor, 
+  ArrowLeft, LogOut, Star, Calendar, Archive, 
+  History, SkipForward, AlertCircle, Trash2, Music, Ghost, MessageSquare, 
+  Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, 
-  onSnapshot, writeBatch, query, getDocs, orderBy 
+  onSnapshot, writeBatch, query, getDocs, orderBy, limit 
 } from 'firebase/firestore';
 
 // ==========================================
@@ -23,7 +24,6 @@ const firebaseConfig = {
   appId: "1:28192352824:web:09d9d5eae72c0853f954cd"
 };
 
-// Initialisation
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -31,14 +31,38 @@ const db = getFirestore(app);
 const appId = 'strangers-phoning-event-final';
 const COLL_CURRENT = 'stranger-phoning-team-v2';
 const COLL_HISTORY = 'stranger-phoning-history';
+const COLL_CHAT = 'strangers-phoning-chat-global';
+const COLL_EVENTS = 'strangers-phoning-global-events';
+
+// --- LEVELS SYSTEM (BASÉ SUR LIFETIME RDVS) ---
+const LEVELS = [
+  { lvl: 1, name: "ROOKIE", unlock: null },
+  { lvl: 2, name: "SCOUT", unlock: null },
+  { lvl: 3, name: "TROOPER", unlock: "Avatar" },
+  { lvl: 4, name: "DETECTIVE", unlock: null },
+  { lvl: 5, name: "SHERIFF", unlock: "Card Color" },
+  { lvl: 6, name: "HERO", unlock: null },
+  { lvl: 7, name: "PSYCHIC", unlock: "Notepad" },
+  { lvl: 8, name: "MIND FLAYER", unlock: null },
+  { lvl: 9, name: "DUNGEON MASTER", unlock: null },
+  { lvl: 10, name: "LEGEND", unlock: "MANAGER BOOST" }
+];
+
+const getLevelInfo = (lifetimeRdvs) => {
+  const count = lifetimeRdvs || 0;
+  const index = Math.min(LEVELS.length - 1, Math.floor(count / 3));
+  return LEVELS[index];
+};
+
+const INACTIVITY_LIMIT = 15 * 24 * 60 * 60 * 1000; 
 
 // --- ASSETS ---
 const SPLASH_IMAGE_URL = "https://cdn.discordapp.com/attachments/1442142804544454748/1442255087128019014/IMG_1060.jpg?ex=6924c438&is=692372b8&hm=b013d7b01ca87824006c7128f52ddefdcc7c33ffc8f50894bb8b9970cd601e50&";
-const INTRO_VIDEO_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1441718480696246293/aHR0cHM6Ly9hc3NldHMueC5haS91c2Vycy80ODc2Y2Y1Yi0zMGU4LTQ3YTUtOTExNS0xOTMyMDhmN2Q1MTcvZ2VuZXJhdGVkL2I5NGMwOTdlLTc5MTktNDg2YS05NjBhLWExOTZkZGQwN2YxMC9nZW5lcmF0ZWRfdmlkZW8ubXA0.mov?ex=692421f7&is=6922d077&hm=90b3bdde0f66249650494cde6bf9193efa26c7171befb02fe5f5de63088a7168&";
-const BACKGROUND_MUSIC_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1442069978101583872/strangersthings.mp3?ex=692417d3&is=6922c653&hm=5e33346aa7ce1d08ab23e603d94527946aea3be5d22e112adcafc981af938de9&";
+const INTRO_VIDEO_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1441718480696246293/aHR0cHM6Ly9hc3NldHMueC5haS91c2Vycy80ODc2Y2Y1Yi0zMGU4LTQ3YTUtOTExNS0xOTMyMDhmN2Q1MTcvZ2VuZXJhdGVkL2I5NGMwOTdlLTc5MTktNDg2YS05NjBhLWExOTZkZGQwN2YxMC9nZW5lcmF0ZWRfdmlkZW8ubXA0.mov?ex=69257377&is=692421f7&hm=684cbd8d14aae26fb8114862a4c78605ffce569766f78d8099a57de1d4b710e5&";
+const BACKGROUND_MUSIC_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1442069978101583872/strangersthings.mp3?ex=69256953&is=692417d3&hm=3865516ba4d17dd398345bd6cdaa34fba44509c47367944f169ac93e106c2452&";
 const BACKGROUND_MAIN_URL = "https://cdn.discordapp.com/attachments/1442142804544454748/1442255087128019014/IMG_1060.jpg?ex=6924c438&is=692372b8&hm=b013d7b01ca87824006c7128f52ddefdcc7c33ffc8f50894bb8b9970cd601e50&";
 
-// --- SYSTEME DE COULEURS ---
+// --- THEMES & COLORS ---
 const THEMES = [
   { name: 'Red', primary: '#ef4444', secondary: '#7f1d1d' },
   { name: 'Blue', primary: '#3b82f6', secondary: '#1e3a8a' },
@@ -50,74 +74,140 @@ const THEMES = [
   { name: 'Orange', primary: '#f97316', secondary: '#7c2d12' },
 ];
 
-const getThemeFromName = (name: string) => {
+const NOTEPAD_THEMES = [
+  { name: 'Classic Yellow', bg: '#f3e5ab', text: '#1e293b' },
+  { name: 'Dark Mode', bg: '#1e293b', text: '#e2e8f0' },
+  { name: 'Neon Pink', bg: '#831843', text: '#fbcfe8' },
+  { name: 'Matrix Green', bg: '#022c22', text: '#4ade80' },
+  { name: 'Cyber Blue', bg: '#172554', text: '#60a5fa' }
+];
+
+const getThemeFromName = (name) => {
   if (!name) return THEMES[0];
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   const index = Math.abs(hash) % THEMES.length;
   return THEMES[index];
 };
 
-// --- MOTEUR AUDIO ---
-const playSound = (type: string, muted: boolean) => {
+// --- AUDIO ---
+const playSound = (type, muted) => {
   if (muted) return;
   try {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
     const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-    const playTone = (freq: number, type: OscillatorType, startTime: number, duration: number, vol = 0.1) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, startTime);
-      gain.gain.setValueAtTime(vol, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(startTime);
-      osc.stop(startTime + duration);
-    };
-
-    if (type === 'intro') {
-      playTone(110, 'sawtooth', now, 1.5, 0.15);
-      playTone(220, 'sine', now + 0.1, 1.0, 0.05);
-    } else if (type === 'click') {
-      playTone(800, 'triangle', now, 0.05, 0.02);
-    } else if (type === 'jackpot') { 
-      playTone(1200, 'sine', now, 0.4, 0.1);
-      playTone(1600, 'sine', now + 0.1, 0.6, 0.1);
-    } else if (type === 'superJackpot') { 
-      const speed = 0.12;
-      playTone(523.25, 'square', now, 0.4, 0.1);
-      playTone(659.25, 'square', now + speed, 0.4, 0.1);
-      playTone(783.99, 'square', now + speed * 2, 0.4, 0.1);
-      playTone(1046.50, 'square', now + speed * 3, 0.4, 0.1);
-      playTone(783.99, 'square', now + speed * 4, 0.4, 0.1);
-      playTone(1046.50, 'square', now + speed * 5, 1.5, 0.2);
-    } else if (type === 'carPass') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.exponentialRampToValueAtTime(50, now + 1.5);
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.3, now + 0.5);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+    const simpleTone = (freq, duration, typeOsc = 'sine') => {
+      osc.type = typeOsc;
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 1.5);
+      osc.stop(now + duration);
+    };
+
+    if (type === 'click') simpleTone(800, 0.05, 'triangle');
+    else if (type === 'unlock') { simpleTone(400, 0.1, 'square'); simpleTone(600, 0.1, 'square'); simpleTone(800, 0.3, 'square'); }
+    else if (type === 'error') { simpleTone(150, 0.3, 'sawtooth'); }
+    else if (type === 'wizz') { simpleTone(150, 0.5, 'sawtooth'); simpleTone(100, 0.5, 'square'); }
+    else if (type === 'upside') { simpleTone(50, 2, 'sawtooth'); }
+    else if (type === 'taunt') { simpleTone(400, 0.1, 'square'); simpleTone(600, 0.1, 'square'); }
+    else if (type === 'message') { simpleTone(800, 0.1); }
+    else if (type === 'eraser') { simpleTone(200, 0.1, 'sawtooth'); }
+    else if (type === 'scan') { simpleTone(1200, 0.05, 'square'); setTimeout(() => simpleTone(1200, 0.05, 'square'), 100); } 
+    else if (type === 'coin') { 
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(988, now);
+        osc.frequency.linearRampToValueAtTime(1319, now + 0.08);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4); 
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.4);
+        return;
     }
-  } catch (e) {
-    console.error("Audio error", e);
-  }
+    else if (type === 'superJackpotFun') {
+        const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00]; 
+        notes.forEach((freq, i) => {
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(freq, now + i * 0.08);
+            gain2.gain.setValueAtTime(0.05, now + i * 0.08);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.3);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(now + i * 0.08);
+            osc2.stop(now + i * 0.08 + 0.3);
+        });
+        setTimeout(() => {
+            const chord = [523.25, 783.99, 1046.50];
+            chord.forEach(f => simpleTone(f, 0.5, 'triangle'));
+        }, notes.length * 80);
+    }
+    else if (type === 'carHorn') {
+        simpleTone(300, 0.1, 'sawtooth');
+        setTimeout(() => simpleTone(300, 0.2, 'sawtooth'), 150);
+    }
+    else if (type === 'levelUp') {
+        // SON LEVEL UP "MARIO STYLE" (Arpège montant joyeux)
+        const notes = [
+             {f: 392.00, d: 0.08}, // G4
+             {f: 523.25, d: 0.08}, // C5
+             {f: 659.25, d: 0.08}, // E5
+             {f: 783.99, d: 0.08}, // G5
+             {f: 1046.50, d: 0.08}, // C6
+             {f: 1318.51, d: 0.08}, // E6
+             {f: 1567.98, d: 0.3},  // G6 (Long)
+        ];
+        
+        let time = now;
+        notes.forEach(n => {
+             const osc2 = ctx.createOscillator();
+             const g2 = ctx.createGain();
+             osc2.type = 'square';
+             osc2.frequency.setValueAtTime(n.f, time);
+             g2.gain.setValueAtTime(0.1, time);
+             g2.gain.exponentialRampToValueAtTime(0.01, time + n.d);
+             osc2.connect(g2);
+             g2.connect(ctx.destination);
+             osc2.start(time);
+             osc2.stop(time + n.d + 0.1);
+             time += n.d;
+        });
+    }
+  } catch (e) {}
 };
 
-// --- COMPOSANT : FOND D'ECRAN GLOBAL ---
+// --- CUSTOM ICONS ---
+const WalkieTalkieIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M7 2h2v5H7z" fillOpacity="0.8" />
+    <rect x="6" y="2" width="4" height="1" rx="0.5" fillOpacity="0.9" />
+    <path d="M8 7h10v15H8z" />
+    <path d="M6 8h2v14H6z" fillOpacity="0.5" />
+    <g fill="rgba(0,0,0,0.3)">
+      <rect x="10" y="9" width="6" height="1" />
+      <rect x="10" y="11" width="6" height="1" />
+      <rect x="10" y="13" width="6" height="1" />
+      <rect x="10" y="15" width="6" height="1" />
+    </g>
+    <rect x="9" y="17" width="8" height="4" fill="rgba(0,0,0,0.1)" />
+    <circle cx="11.5" cy="19" r="1.5" fill="rgba(0,0,0,0.6)" />
+    <circle cx="14.5" cy="19" r="1.5" fill="rgba(0,0,0,0.6)" />
+    <rect x="15.5" y="16" width="1" height="1" fill="#ef4444" />
+  </svg>
+);
+
+// --- COMPONENTS ---
+
 const AppBackground = () => (
   <div className="fixed inset-0 z-[-1]">
     <img src={BACKGROUND_MAIN_URL} alt="Background" className="w-full h-full object-cover" />
@@ -126,140 +216,585 @@ const AppBackground = () => (
   </div>
 );
 
-// --- COMPOSANT : ECRAN BRAVO ---
-const CelebrationOverlay = ({ name, title, type = 'player', icon = '👍' }: { name: string, title: string, type?: 'player' | 'coach', icon?: string }) => {
+const LevelUpOverlay = ({ levelName, levelNum }) => {
+    return (
+        <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center animate-in zoom-in duration-500 pointer-events-none">
+            <div className="relative flex flex-col items-center">
+                {/* Étoiles animées */}
+                <div className="flex gap-2 mb-6">
+                    <Star size={40} className="text-yellow-400 animate-bounce delay-0" fill="currentColor" />
+                    <Star size={56} className="text-yellow-300 animate-bounce delay-100" fill="currentColor" />
+                    <Star size={40} className="text-yellow-400 animate-bounce delay-200" fill="currentColor" />
+                </div>
+                
+                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_25px_rgba(234,179,8,0.8)] animate-pulse mb-8">
+                    LEVEL UP!!
+                </h1>
+                
+                <div className="flex items-center gap-6 justify-center">
+                    {/* Avatar avec lunettes (seed spécifique) */}
+                    <div className="relative w-32 h-32">
+                        <img 
+                            src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=Agent&backgroundColor=transparent`} 
+                            alt="Level Up Avatar" 
+                            className="w-full h-full rounded-full border-4 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.6)] bg-slate-800"
+                        />
+                        {/* Bulle de dialogue */}
+                        <div className="absolute -top-10 -right-24 bg-white text-black font-black p-3 rounded-xl border-4 border-black whitespace-nowrap animate-bounce z-50">
+                            Tu es au top !
+                            <div className="absolute bottom-[-10px] left-4 w-4 h-4 bg-white border-r-4 border-b-4 border-black transform rotate-45"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-slate-800/80 border-2 border-yellow-500 px-8 py-4 rounded-xl text-center shadow-2xl transform rotate-1 mt-10">
+                    <p className="text-yellow-200 font-bold text-sm uppercase tracking-widest mb-1">NOUVEAU RANG</p>
+                    <h2 className="text-4xl font-black text-white uppercase">{levelName}</h2>
+                    <div className="text-xs font-mono text-yellow-500 mt-2">NIVEAU {levelNum} ATTEINT</div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- NOTEPAD EVOLUTIF (AVEC MODE DÉTECTIVE) ---
+const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex }) => {
+  const [activeTab, setActiveTab] = useState('J1');
+  const [notes, setNotes] = useState(initialData || { J1: '', J2: '', J3: '' });
+  const [isSaving, setIsSaving] = useState(false);
+  const [mode, setMode] = useState('notes'); // 'notes' ou 'search'
+  
+  // SIRET SEARCH STATES
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const timeoutRef = useRef(null);
+  const themeStyle = NOTEPAD_THEMES[noteThemeIndex % NOTEPAD_THEMES.length] || NOTEPAD_THEMES[0];
+  const canCustomize = currentLevel.lvl >= 7;
+
+  useEffect(() => { if (initialData) setNotes(initialData); }, [initialData]);
+
+  const handleNoteChange = (e) => {
+    const newVal = e.target.value;
+    const newNotes = { ...notes, [activeTab]: newVal };
+    setNotes(newNotes);
+    setIsSaving(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { [`notes`]: newNotes, lastActive: Date.now() });
+        setIsSaving(false);
+      } catch (err) {}
+    }, 1500);
+  };
+
+  const clearPage = async () => {
+      playSound('eraser', false);
+      const newNotes = { ...notes, [activeTab]: '' };
+      setNotes(newNotes);
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { [`notes`]: newNotes, lastActive: Date.now() });
+  };
+
+  const cycleTheme = async () => {
+    if (!canCustomize) return;
+    const nextIndex = (noteThemeIndex + 1) % NOTEPAD_THEMES.length;
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { noteThemeIndex: nextIndex });
+  };
+
+  const handleSiretSearch = async (e) => {
+      e.preventDefault();
+      if (!searchQuery.trim()) return;
+      
+      setIsSearching(true);
+      setSearchResult(null);
+      playSound('scan', false);
+
+      try {
+          const response = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&page=1&per_page=1`);
+          const data = await response.json();
+          
+          if (data.results && data.results.length > 0) {
+              setSearchResult(data.results[0]);
+          } else {
+              setSearchResult('not_found');
+          }
+      } catch (error) {
+          console.error("Search error", error);
+          setSearchResult('error');
+      }
+      setIsSearching(false);
+  };
+
+  return (
+    <div 
+      className="w-full max-w-md min-h-[400px] rounded-lg border-2 flex flex-col font-mono overflow-hidden relative transform rotate-1 lg:mt-0 mt-8 backdrop-blur-md transition-colors duration-500 shadow-2xl"
+      style={{ 
+        backgroundColor: themeStyle.bg + 'E6',
+        borderColor: themeStyle.text,
+        boxShadow: `0 0 20px ${themeStyle.text}40`
+      }}
+    >
+      {/* HEADER */}
+      <div className="h-8 bg-black/50 flex justify-between items-center px-2 border-b border-white/10 shrink-0">
+        <div className="flex items-center gap-2">
+            {/* BOUTON MODE DÉTECTIVE (GAUCHE) */}
+            <button 
+                onClick={() => { setMode(mode === 'notes' ? 'search' : 'notes'); playSound('click', false); }}
+                className={`flex items-center justify-center w-6 h-6 rounded hover:bg-white/20 transition-colors ${mode === 'search' ? 'bg-white/20 text-white' : 'text-slate-400'}`}
+                title="Mode Détective (SIRET)"
+            >
+                <Search size={14} />
+            </button>
+            
+            {/* TEXTE D'AIDE AJOUTÉ ICI */}
+            {mode === 'notes' && (
+                <span className="text-[10px] uppercase font-bold opacity-50 animate-pulse ml-1" style={{color: themeStyle.text}}>
+                    ← clique sur la loupe
+                </span>
+            )}
+        </div>
+
+        <div className="flex items-center gap-2">
+            {canCustomize && mode === 'notes' && (
+            <button onClick={cycleTheme} className="text-[10px] uppercase font-bold text-white bg-white/20 px-2 py-1 rounded hover:bg-white/30 flex items-center gap-1">
+                <Settings size={10}/> Skin
+            </button>
+            )}
+            {mode === 'notes' && (
+                <button onClick={clearPage} className="text-white hover:text-red-400 transition-colors" title="Effacer la page">
+                    <Eraser size={14} />
+                </button>
+            )}
+        </div>
+      </div>
+      
+      {/* TABS (Only in Notes Mode) */}
+      {mode === 'notes' && (
+        <div className="flex bg-black/20 shrink-0">
+            {['J1', 'J2', 'J3'].map(tab => (
+            <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-2 font-bold text-xs border-r border-white/10 transition-all ${activeTab === tab ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
+                style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}
+            >
+                {tab}
+            </button>
+            ))}
+        </div>
+      )}
+
+      {/* CONTENT */}
+      <div className="flex-1 relative p-4 overflow-hidden flex flex-col">
+        {mode === 'notes' ? (
+            <>
+                <textarea
+                value={notes[activeTab] || ''}
+                onChange={handleNoteChange}
+                placeholder={`// Notes du ${activeTab}...`}
+                className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px] font-bold"
+                style={{ 
+                    fontFamily: "'Courier New', Courier, monospace",
+                    color: themeStyle.text,
+                    textShadow: `0 0 2px ${themeStyle.text}40`
+                }}
+                />
+                <div className="absolute bottom-2 right-2 text-[10px] font-bold uppercase flex items-center gap-1">
+                {isSaving ? <span className="animate-pulse opacity-50" style={{color: themeStyle.text}}>...</span> : <span className="flex items-center gap-1 opacity-70" style={{color: themeStyle.text}}><Save size={10}/></span>}
+                </div>
+            </>
+        ) : (
+            <div className="w-full h-full flex flex-col animate-in fade-in slide-in-from-left-4" style={{color: themeStyle.text}}>
+                <h3 className="text-xs font-black uppercase border-b border-current pb-2 mb-4 flex items-center gap-2 opacity-70">
+                    <FileText size={14}/> DOSSIER D'ENQUÊTE
+                </h3>
+                
+                <form onSubmit={handleSiretSearch} className="flex gap-2 mb-4 shrink-0">
+                    <input 
+                        type="text" 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="SIRET ou NOM..."
+                        className="flex-1 bg-black/20 border border-current/30 rounded p-2 text-sm font-mono focus:outline-none focus:border-current uppercase"
+                        style={{color: themeStyle.text}}
+                    />
+                    <button type="submit" disabled={isSearching} className="px-3 py-2 bg-black/30 border border-current/30 rounded hover:bg-black/50">
+                        {isSearching ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <Search size={16}/>}
+                    </button>
+                </form>
+
+                <div className="flex-1 overflow-y-auto text-xs font-mono space-y-2 pr-1 custom-scrollbar">
+                    <style>{`
+                        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+                        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+                    `}</style>
+
+                    {searchResult === 'not_found' && <div className="opacity-50 italic text-center py-4">⚠️ CIBLE INTROUVABLE</div>}
+                    {searchResult === 'error' && <div className="text-red-400 font-bold text-center py-4">ERREUR DE LIAISON SATELLITE</div>}
+                    
+                    {searchResult && typeof searchResult === 'object' && (
+                        <div className="space-y-4 pb-4">
+                            <div className="border-2 border-dashed border-current/30 p-3 bg-black/10 relative">
+                                <div className="absolute -top-2 -left-2 text-[40px] opacity-10 pointer-events-none rotate-12 font-black">CONFIDENTIEL</div>
+                                
+                                {/* EN-TÊTE ENTREPRISE */}
+                                <div className="mb-4 pb-2 border-b border-current/20">
+                                    <div className="opacity-50 text-[9px] uppercase tracking-widest mb-1">CIBLE PRINCIPALE</div>
+                                    <div className="font-black text-base uppercase leading-tight">{searchResult.nom_complet}</div>
+                                    <div className="flex items-center gap-1 mt-1 opacity-70 text-[10px]">
+                                        <Building size={10} /> SIRET: {searchResult.siege?.siret}
+                                    </div>
+                                </div>
+
+                                {/* ADRESSE */}
+                                <div className="mb-3">
+                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold">
+                                        <MapPin size={10} /> LOCALISATION
+                                    </div>
+                                    <div className="pl-3 border-l-2 border-current/30">
+                                        {searchResult.siege?.adresse}
+                                    </div>
+                                </div>
+
+                                {/* DIRIGEANTS */}
+                                <div className="mb-3">
+                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold">
+                                        <User size={10} /> DIRECTION
+                                    </div>
+                                    <div className="pl-3 border-l-2 border-current/30">
+                                        {searchResult.dirigeants && searchResult.dirigeants.length > 0 ? (
+                                            searchResult.dirigeants.map((d, i) => (
+                                                <div key={i} className="uppercase">{d.prenoms} {d.nom} <span className="opacity-50 text-[9px]">({d.qualite})</span></div>
+                                            ))
+                                        ) : (
+                                            <div className="italic opacity-50">Donnée non publique</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* CHIFFRES (CA & SALARIÉS) */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-black/20 p-2 rounded">
+                                        <div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1"><Users size={8}/> EFFECTIF</div>
+                                        <div className="font-bold">{searchResult.tranche_effectif_salarie ? searchResult.tranche_effectif_salarie + " Salariés" : "N/A"}</div>
+                                    </div>
+                                    <div className="bg-black/20 p-2 rounded border border-red-900/30 relative overflow-hidden">
+                                        <div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1 text-red-400"><DollarSign size={8}/> C.A.</div>
+                                        <div className="font-black text-red-500 text-xs tracking-widest">CLASSIFIÉ</div>
+                                        <div className="absolute top-0 right-0 bottom-0 left-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-10"></div>
+                                    </div>
+                                </div>
+
+                                {/* META */}
+                                <div className="mt-3 pt-2 border-t border-dashed border-current/30 text-[9px] flex justify-between opacity-50">
+                                    <span>STATUT: {searchResult.etat_administratif === 'A' ? 'ACTIF' : 'INACTIF'}</span>
+                                    <span>CRÉATION: {searchResult.date_creation}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {!searchResult && !isSearching && (
+                        <div className="opacity-30 text-center mt-10 flex flex-col items-center gap-2">
+                            <Search size={32} className="animate-pulse"/>
+                            <p>En attente de saisie...</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ChatSystem = ({ myName, myId }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [hasUnread, setHasUnread] = useState(false); 
+  const messagesEndRef = useRef(null);
+  const lastMsgIdRef = useRef(null);
+  const isOpenRef = useRef(isOpen); 
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+    if (isOpen) {
+        setHasUnread(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), orderBy('timestamp', 'desc'), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse();
+      setMessages(msgs);
+      
+      if (msgs.length > 0) {
+          const latest = msgs[msgs.length - 1];
+          if (lastMsgIdRef.current && lastMsgIdRef.current !== latest.id) {
+              playSound('message', false);
+              if (!isOpenRef.current) {
+                  setHasUnread(true);
+              }
+          }
+          lastMsgIdRef.current = latest.id;
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => { if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isOpen]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), {
+      text: inputText.trim(), senderName: myName, senderId: myId, timestamp: Date.now()
+    });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { lastActive: Date.now() });
+    setInputText('');
+  };
+
+  if (!isOpen) return (
+    <button 
+        onClick={() => setIsOpen(true)} 
+        className="fixed bottom-24 right-4 z-[60] transition-transform hover:scale-110 active:scale-95 focus:outline-none"
+    >
+      {/* CONTAINER DU TALKIE SANS CADRE - JUSTE L'ICONE AVEC EFFET */}
+      <div className={`relative transition-all duration-500 ${hasUnread ? 'animate-bounce' : ''}`}>
+        <WalkieTalkieIcon 
+            className={`w-16 h-24 md:w-20 md:h-28 drop-shadow-2xl filter transition-all duration-500
+            ${hasUnread 
+                ? 'text-green-500 drop-shadow-[0_0_20px_rgba(74,222,128,0.9)]' 
+                : 'text-red-700 drop-shadow-[0_0_15px_rgba(185,28,28,0.6)]'}`}
+        />
+        
+        {/* INDICATEUR NON LU (LED QUI CLIGNOTE) */}
+        {hasUnread && (
+            <span className="absolute -top-2 -right-2 flex h-6 w-6">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-6 w-6 bg-green-500 border-2 border-black"></span>
+            </span>
+        )}
+      </div>
+    </button>
+  );
+
+  return (
+    <div className="fixed bottom-20 right-4 z-[60] w-80 md:w-96 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-t-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
+      <div className="bg-slate-900 p-3 border-b border-slate-700 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+            <WalkieTalkieIcon className="w-5 h-5 text-slate-400"/>
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <span className="text-xs font-mono uppercase text-slate-300">CHANNEL 4</span>
+        </div>
+        <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white"><Minimize2 size={18} /></button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-700">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex gap-3 ${msg.senderId === myId ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className="w-8 h-8 rounded border border-slate-700 bg-slate-800 overflow-hidden shrink-0">
+              <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(msg.senderName)}`} className="w-full h-full object-cover" />
+            </div>
+            <div className={`flex flex-col max-w-[75%] ${msg.senderId === myId ? 'items-end' : 'items-start'}`}>
+              <span className="text-[10px] text-slate-500 uppercase font-bold mb-1">{msg.senderName}</span>
+              <div className={`p-2 rounded-lg text-sm font-mono break-words ${msg.senderId === myId ? 'bg-red-900/40 text-red-100 border border-red-800' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>{msg.text}</div>
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      <form onSubmit={sendMessage} className="p-3 bg-slate-900 border-t border-slate-700 flex gap-2">
+        <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="..." className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 font-mono" />
+        <button type="submit" disabled={!inputText.trim()} className="p-2 bg-red-600 text-white rounded-lg"><Send size={18} /></button>
+      </form>
+    </div>
+  );
+};
+
+const CarAnimationOverlay = ({ name }) => {
+    if (!name) return null;
+    return (
+        <div className="fixed bottom-10 left-[-200px] z-[9999] animate-drive-by pointer-events-none">
+            <style>{`
+                @keyframes driveBy {
+                    0% { transform: translateX(0); }
+                    100% { transform: translateX(120vw); }
+                }
+                .animate-drive-by {
+                    animation: driveBy 4s linear forwards;
+                }
+            `}</style>
+            <div className="relative">
+                {/* Bubble Speech */}
+                <div className="absolute -top-16 left-10 bg-white text-black font-black italic px-4 py-2 rounded-xl border-4 border-black whitespace-nowrap animate-bounce">
+                    GO GO GO !
+                    <div className="absolute bottom-[-10px] left-4 w-4 h-4 bg-white border-r-4 border-b-4 border-black transform rotate-45"></div>
+                </div>
+                
+                {/* Avatar */}
+                <div className="absolute -top-8 left-4 w-16 h-16 rounded-full border-2 border-black overflow-hidden bg-slate-800 z-0">
+                    <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(name)}`} className="w-full h-full object-cover" />
+                </div>
+
+                {/* Car Body (Pixel Art style with CSS) */}
+                <div className="relative z-10">
+                    <div className="w-32 h-12 bg-red-600 rounded-t-xl border-4 border-black flex items-center justify-center">
+                        <div className="text-white font-bold text-xs uppercase tracking-widest">TURBO</div>
+                    </div>
+                    <div className="absolute -bottom-4 left-2 w-8 h-8 bg-black rounded-full border-4 border-gray-600 animate-spin"></div>
+                    <div className="absolute -bottom-4 right-2 w-8 h-8 bg-black rounded-full border-4 border-gray-600 animate-spin"></div>
+                </div>
+                
+                {/* Motion Lines */}
+                <div className="absolute top-4 -left-10 flex flex-col gap-2">
+                     <div className="w-8 h-1 bg-white opacity-50"></div>
+                     <div className="w-12 h-1 bg-white opacity-50"></div>
+                     <div className="w-6 h-1 bg-white opacity-50"></div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const SpecialEffectsLayer = ({ activeEffect }) => {
+  if (!activeEffect) return null;
+  if (activeEffect.type === 'taunt') {
+    return (
+      <div className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center animate-in zoom-in duration-300">
+        <div className="flex flex-col items-center">
+          <div className="relative">
+             <style>{`@keyframes twerk { 0%,100% {transform:rotate(0deg);} 25% {transform:rotate(-10deg) translateY(10px);} 75% {transform:rotate(10deg) translateY(10px);} }`}</style>
+             <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(activeEffect.senderName)}`} className="w-64 h-64 md:w-96 md:h-96 object-cover drop-shadow-[0_0_50px_rgba(220,38,38,0.8)]" style={{ animation: 'twerk 0.2s infinite' }} />
+             <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-black/80 text-white px-6 py-2 rounded-full font-bold uppercase whitespace-nowrap border border-red-500 animate-bounce">{activeEffect.senderName} te nargue !</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CelebrationOverlay = ({ name, title, type = 'player', icon = '👍' }) => {
   const theme = getThemeFromName(name);
   const avatarSeed = type === 'coach' ? 'CoachStrangerThings80s' : name;
   const avatarUrl = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(avatarSeed)}&backgroundType=solid&backgroundColor=transparent`;
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center animate-in zoom-in duration-300 backdrop-blur-md">
-      <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(220,38,38,0.4)_0%,transparent_70%)] animate-pulse"></div>
       <div className="relative z-10 flex flex-col items-center">
         <div className="flex items-end gap-4 mb-6">
-          <div 
-            className={`w-32 h-32 md:w-48 md:h-48 rounded-2xl border-4 shadow-[0_0_50px_rgba(255,255,255,0.2)] overflow-hidden animate-bounce`}
-            style={{ borderColor: theme.primary, backgroundColor: theme.secondary }}
-          >
+          <div className="w-32 h-32 md:w-48 md:h-48 rounded-2xl border-4 shadow-[0_0_50px_rgba(255,255,255,0.2)] overflow-hidden animate-bounce bg-slate-800" style={{ borderColor: theme.primary }}>
             <img src={avatarUrl} alt="Winner" className="w-full h-full object-cover" />
           </div>
-          <div className="text-6xl md:text-8xl animate-pulse origin-bottom-left rotate-12 filter drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]">
-            {icon}
-          </div>
+          <div className="text-6xl md:text-8xl animate-pulse origin-bottom-left rotate-12 filter drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]">{icon}</div>
         </div>
-        <h2 
-          className="text-5xl md:text-8xl font-black tracking-widest uppercase scale-110 transform transition-transform text-center px-4"
-          style={{ color: theme.primary, textShadow: `0 0 20px ${theme.primary}` }}
-        >
-          {title}
-        </h2>
-        <h3 className="text-2xl md:text-4xl font-bold text-white mt-4 tracking-widest uppercase drop-shadow-lg bg-black/40 px-6 py-2 rounded-full border border-white/10">
-          {type === 'coach' ? `POUR ${name}` : name}
-        </h3>
+        <h2 className="text-5xl md:text-8xl font-black tracking-widest uppercase scale-110 text-center px-4" style={{ color: theme.primary, textShadow: `0 0 20px ${theme.primary}` }}>{title}</h2>
+        <h3 className="text-2xl md:text-4xl font-bold text-white mt-4 tracking-widest uppercase drop-shadow-lg bg-black/40 px-6 py-2 rounded-full border border-white/10">{type === 'coach' ? `POUR ${name}` : name}</h3>
       </div>
     </div>
   );
 };
 
-// --- COMPOSANT : MODAL DE CONFIRMATION SUPPRESSION ---
-const DeleteConfirmModal = ({ name, onConfirm, onCancel }: { name: string, onConfirm: () => void, onCancel: () => void }) => (
-  <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-4 animate-in fade-in duration-200 backdrop-blur">
-    <div className="bg-slate-900 border-2 border-red-600 rounded-2xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(220,38,38,0.5)] text-center">
-      <AlertCircle size={64} className="mx-auto text-red-500 mb-4 animate-bounce" />
-      <h3 className="text-2xl font-black text-white mb-2">ATTENTION !</h3>
-      <p className="text-slate-300 mb-8 text-lg">
-        Voulez-vous vraiment bannir <strong>{name}</strong> dans le Monde à l'Envers ? <br/>
-        <span className="text-xs opacity-50">(Cette action est irréversible)</span>
-      </p>
-      <div className="flex gap-4">
-        <button 
-          onClick={onCancel}
-          className="flex-1 py-4 rounded-xl bg-slate-800 text-white font-bold border border-slate-600 hover:bg-slate-700 transition-colors"
-        >
-          ANNULER
-        </button>
-        <button 
-          onClick={onConfirm}
-          className="flex-1 py-4 rounded-xl bg-red-600 text-white font-bold hover:bg-red-500 shadow-lg shadow-red-900/50 transition-colors flex items-center justify-center gap-2"
-        >
-          <Trash2 size={20} /> SUPPRIMER
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-// --- COMPOSANT : EFFET SPORES (MONDE A L'ENVERS) ---
-const UpsideDownParticles = () => (
-  <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-    {[...Array(30)].map((_, i) => (
-      <div 
-        key={i} 
-        className="absolute rounded-full bg-gray-400/40 animate-pulse"
-        style={{
-          width: Math.random() * 4 + 1 + 'px',
-          height: Math.random() * 4 + 1 + 'px',
-          top: Math.random() * 100 + '%',
-          left: Math.random() * 100 + '%',
-          animation: `float ${Math.random() * 10 + 10}s linear infinite`,
-          opacity: Math.random() * 0.5 + 0.2
-        }}
-      />
-    ))}
-    <style>{`
-      @keyframes float {
-        0% { transform: translateY(0) translateX(0); opacity: 0; }
-        10% { opacity: 0.8; }
-        90% { opacity: 0.8; }
-        100% { transform: translateY(-100vh) translateX(${Math.random() * 50 - 25}px); opacity: 0; }
-      }
-    `}</style>
-  </div>
-);
-
-// --- COMPOSANT CARTE JOUEUR ---
-const PlayerCard = ({ player, rank, isLeader, onUpdate, onRequestDelete, isAdmin = false, showControls = true, bigMode = false, flashId }: any) => {
+const PlayerCard = ({ player, rank, isLeader, onUpdate, onRequestDelete, onUsePower, isAdmin = false, showControls = true, bigMode = false, flashId }) => {
   const isFlashing = flashId === player.id;
-  const theme = getThemeFromName(player.name);
-  const avatarUrl = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(player.name)}&backgroundType=solid&backgroundColor=transparent`;
-  const borderColor = isFlashing ? '#4ade80' : (isLeader ? '#eab308' : theme.primary);
-  const shadowStyle = isFlashing ? `0 0 50px #4ade80` : (isLeader ? `0 0 30px #eab308` : `0 0 15px ${theme.primary}40`);
+  const usedPowers = player.powersUsed || 0;
+  const availableStock = Math.max(0, (player.rdvs || 0) - usedPowers);
+  const nextPowerIndex = usedPowers % 3; 
+
+  const levelInfo = getLevelInfo(player.lifetimeRdvs || 0);
+  const canCustomAvatar = levelInfo.lvl >= 3;
+  const canCustomColor = levelInfo.lvl >= 5;
+  
+  const defaultTheme = getThemeFromName(player.name);
+  const customTheme = canCustomColor && player.cardThemeIndex !== undefined 
+    ? THEMES[player.cardThemeIndex % THEMES.length] 
+    : defaultTheme;
+  
+  const avatarSeed = canCustomAvatar && player.avatarSeed ? player.avatarSeed : player.name;
+  const avatarUrl = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(avatarSeed)}&backgroundType=solid&backgroundColor=transparent`;
+
+  const nextPowerLabels = ["Wizz", "Shake", "Inverser"];
+  const nextPowerLabel = nextPowerLabels[nextPowerIndex];
+
+  const cycleColor = async () => {
+    if (!canCustomColor || isAdmin) return;
+    const nextIdx = ((player.cardThemeIndex || 0) + 1) % THEMES.length;
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, player.id), { cardThemeIndex: nextIdx, lastActive: Date.now() });
+    playSound('click', false);
+  };
+
+  const randomizeAvatar = async () => {
+    if (!canCustomAvatar || isAdmin) return;
+    const newSeed = player.name + Math.random().toString(36).substring(7);
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, player.id), { avatarSeed: newSeed, lastActive: Date.now() });
+    playSound('click', false);
+  };
+
+  const activateBoost = async () => {
+    if (levelInfo.lvl < 10) return;
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_EVENTS), {
+      type: 'manager_boost', senderName: player.name, timestamp: Date.now()
+    });
+    alert("DEMANDE DE BOOST ENVOYÉE AU MANAGER !");
+  };
 
   return (
     <div 
-      className={`relative bg-slate-900/90 backdrop-blur-md rounded-xl border-2 transition-all duration-300 overflow-hidden 
-      ${bigMode ? 'p-6 w-full max-w-md mx-auto' : 'p-4'}`}
-      style={{ borderColor: borderColor, boxShadow: shadowStyle }}
+      className={`relative bg-slate-900/10 backdrop-blur-md rounded-xl border-2 transition-all duration-300 overflow-hidden 
+      ${bigMode ? 'p-6 w-full max-w-md' : 'p-4'}`}
+      style={{ borderColor: isFlashing ? '#4ade80' : customTheme.primary, boxShadow: isFlashing ? `0 0 50px #4ade80` : `0 0 15px ${customTheme.primary}40` }}
     >
       {player.rdvs >= 3 && <div className="absolute inset-0 bg-white/5 animate-pulse pointer-events-none"></div>}
       
-      {/* --- BOUTON SUPPRIMER (Declenche la modale) --- */}
-      {isAdmin && (
-        <button 
-          onClick={(e) => { 
-            e.preventDefault(); 
-            e.stopPropagation(); 
-            onRequestDelete(player); // Passe l'objet joueur entier
-          }} 
-          className="absolute top-3 right-3 z-[50] w-10 h-10 bg-slate-950 rounded-full text-slate-500 hover:text-white hover:bg-red-600 border border-slate-700 flex items-center justify-center transition-all shadow-lg"
-          title="Supprimer le joueur"
-        >
-          <Trash2 size={18} />
-        </button>
-      )}
+      {/* DELETE BUTTON MOVED TO BOTTOM RIGHT */}
+      {isAdmin && <button onClick={(e) => { e.stopPropagation(); onRequestDelete(player); }} className="absolute bottom-3 right-3 z-[50] w-8 h-8 bg-slate-950/80 backdrop-blur rounded-full text-slate-500 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all border border-slate-700"><Trash2 size={14} /></button>}
 
-      <div className="flex items-center justify-between mb-4 relative z-10">
-        <div className="flex items-center gap-3 overflow-hidden">
-          {rank && (
-            <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-sm border
-              ${rank === 1 ? 'bg-yellow-500 text-black border-yellow-400' : 
-                rank === 2 ? 'bg-slate-300 text-slate-900 border-slate-200' : 
-                rank === 3 ? 'bg-orange-700 text-orange-100 border-orange-600' : 'bg-slate-800 text-slate-500 border-slate-700'}
-            `}>{rank === 1 ? <Crown size={14} /> : rank}</div>
-          )}
-          <div className="w-12 h-12 rounded-lg overflow-hidden border-2 flex-shrink-0" style={{ borderColor: theme.primary, backgroundColor: theme.secondary }}><img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" /></div>
-          <h2 className={`font-bold truncate ${bigMode ? 'text-3xl' : 'text-lg'}`} style={{ color: theme.primary }}>{player.name}</h2>
+      <div className="flex items-center gap-4 mb-4 relative z-10">
+        {/* 1. AVATAR (GAUCHE) */}
+        <div className="relative group flex-shrink-0">
+            <div className="w-14 h-14 rounded-xl overflow-hidden border-2 flex-shrink-0 shadow-lg" style={{ borderColor: customTheme.primary, backgroundColor: customTheme.secondary }}><img src={avatarUrl} alt="Av" className="w-full h-full object-cover" /></div>
+            {canCustomAvatar && showControls && !isAdmin && (
+                <button onClick={randomizeAvatar} className="absolute -bottom-2 -right-2 bg-slate-800 p-1 rounded-full border border-slate-600 text-white hover:bg-blue-600 animate-in zoom-in" title="Changer Avatar"><Settings size={10}/></button>
+            )}
         </div>
+        
+        {/* 2. NOM (CENTRE/GAUCHE) - HAUTEUR LIBRE POUR ÉVITER L'ÉCRASEMENT */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center py-1">
+            <h2 className={`font-black truncate leading-none mb-1 ${bigMode ? 'text-2xl' : 'text-xl'}`} style={{ color: customTheme.primary }}>{player.name}</h2>
+            <div className="text-[10px] text-slate-400 font-mono uppercase tracking-widest leading-tight">{levelInfo.name}</div>
+            
+            {/* ADMIN POWER INFO */}
+            {isAdmin && (
+                <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${availableStock > 0 ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>
+                        POUVOIRS: {availableStock}
+                    </span>
+                    {availableStock > 0 ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-purple-900/30 text-purple-400 border-purple-500/30">
+                            NEXT: {nextPowerLabel}
+                        </span>
+                    ) : (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-900/20 text-red-500 border-red-500/20 opacity-50">
+                            ÉPUISÉ
+                        </span>
+                    )}
+                </div>
+            )}
+        </div>
+
+        {/* 3. RANK & LEVEL (DROITE) */}
+        <div className="flex flex-col items-center justify-center min-w-[40px] flex-shrink-0">
+            {rank && <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center font-black text-lg border bg-slate-800 text-slate-400 border-slate-700 mb-1`}>{rank === 1 ? <Crown size={20} className="text-yellow-500"/> : rank}</div>}
+            <div className="text-xs uppercase font-black text-yellow-500 bg-yellow-900/30 px-2 py-0.5 rounded border border-yellow-700/50 shadow-lg whitespace-nowrap">LVL {levelInfo.lvl}</div>
+        </div>
+        
+        {canCustomColor && showControls && !isAdmin && (
+            <button onClick={cycleColor} className="bg-slate-800 p-1.5 rounded border border-slate-600 text-white hover:bg-blue-600 self-center animate-in zoom-in" title="Changer Couleur"><Settings size={14}/></button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 relative z-10">
@@ -267,384 +802,460 @@ const PlayerCard = ({ player, rank, isLeader, onUpdate, onRequestDelete, isAdmin
           <div className="flex justify-between items-start mb-1"><span className="text-[10px] text-slate-500 font-bold uppercase">Appels</span><Phone size={12} className="text-slate-600" /></div>
           <div className="flex justify-between items-end"><span className="text-2xl font-mono text-white">{player.calls}</span>{showControls && (<div className="flex gap-1"><button onClick={() => onUpdate(player.id, 'calls', -1)} className="w-8 h-8 rounded bg-slate-800 text-slate-500 hover:text-white flex items-center justify-center">-</button><button onClick={() => onUpdate(player.id, 'calls', 1)} className="w-8 h-8 rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white flex items-center justify-center"><Plus size={16} /></button></div>)}</div>
         </div>
-        <div className="rounded-lg p-3 border flex flex-col justify-between transition-colors duration-500" style={{ borderColor: `${theme.primary}60`, background: `linear-gradient(135deg, ${theme.secondary}40, transparent)` }}>
-          <div className="flex justify-between items-start mb-1">
-            <span className="text-[10px] font-bold uppercase" style={{color: theme.primary}}>RDV</span>
-            <div className="flex gap-1">
-              {player.rdvs >= 3 && <Star size={12} className="animate-spin-slow" style={{color: theme.primary}} fill="currentColor"/>}
-              <Trophy size={12} style={{color: theme.primary}} />
-            </div>
-          </div>
-          <div className="flex justify-between items-end"><span className="text-3xl font-mono font-bold" style={{color: theme.primary}}>{player.rdvs}</span>{showControls && (<div className="flex gap-1"><button onClick={() => onUpdate(player.id, 'rdvs', -1)} className="w-8 h-8 rounded bg-slate-800 text-slate-500 hover:text-white flex items-center justify-center">-</button><button onClick={() => onUpdate(player.id, 'rdvs', 1, true)} className="w-8 h-8 rounded text-black shadow-lg active:scale-95 flex items-center justify-center" style={{ backgroundColor: theme.primary, boxShadow: `0 0 10px ${theme.primary}` }}><Plus size={18} strokeWidth={3} /></button></div>)}</div>
+        <div className="rounded-lg p-3 border flex flex-col justify-between" style={{ borderColor: `${customTheme.primary}60`, background: `linear-gradient(135deg, ${customTheme.secondary}40, transparent)` }}>
+          <div className="flex justify-between items-start mb-1"><span className="text-[10px] font-bold uppercase" style={{color: customTheme.primary}}>RDV</span><Trophy size={12} style={{color: customTheme.primary}} /></div>
+          <div className="flex justify-between items-end"><span className="text-3xl font-mono font-bold" style={{color: customTheme.primary}}>{player.rdvs}</span>{showControls && (<div className="flex gap-1"><button onClick={() => onUpdate(player.id, 'rdvs', -1)} className="w-8 h-8 rounded bg-slate-800 text-slate-500 hover:text-white flex items-center justify-center">-</button><button onClick={() => onUpdate(player.id, 'rdvs', 1, true)} className="w-8 h-8 rounded text-black shadow-lg active:scale-95 flex items-center justify-center" style={{ backgroundColor: customTheme.primary }}><Plus size={18} strokeWidth={3} /></button></div>)}</div>
         </div>
       </div>
+
+      {/* Ajout du Rang Actuel ici */}
+      {bigMode && (
+        <div className="flex justify-end mt-2 mb-1 relative z-10">
+            <span className="inline-block bg-slate-900/80 px-3 py-1 rounded-full text-[10px] uppercase font-bold text-slate-400 border border-slate-800">
+                Rang actuel : <strong className="text-white">#{rank}</strong>
+            </span>
+        </div>
+      )}
+
+      {showControls && bigMode && (
+        <div className="mt-1 border-t border-slate-800 pt-3 relative z-10">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[10px] font-bold uppercase text-slate-400">POUVOIRS ({availableStock} DISPO)</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <button disabled={availableStock <= 0 || nextPowerIndex !== 0} onClick={() => onUsePower('taunt')} className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${availableStock > 0 && nextPowerIndex === 0 ? 'bg-purple-900/50 border-purple-500 text-white animate-pulse' : 'bg-slate-950 border-slate-800 text-slate-600 opacity-50'}`}><Move size={20} /><span className="text-[8px] font-bold uppercase">Wizz</span></button>
+            <button disabled={availableStock <= 0 || nextPowerIndex !== 1} onClick={() => onUsePower('wizz')} className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${availableStock > 0 && nextPowerIndex === 1 ? 'bg-blue-900/50 border-blue-500 text-white animate-pulse' : 'bg-slate-950 border-slate-800 text-slate-600 opacity-50'}`}><Zap size={20} /><span className="text-[8px] font-bold uppercase">Shake</span></button>
+            <button disabled={availableStock <= 0 || nextPowerIndex !== 2} onClick={() => onUsePower('upside')} className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${availableStock > 0 && nextPowerIndex === 2 ? 'bg-red-900/50 border-red-500 text-white animate-pulse' : 'bg-slate-950 border-slate-800 text-slate-600 opacity-50'}`}><RotateCw size={20} /><span className="text-[8px] font-bold uppercase">Inverser</span></button>
+          </div>
+          
+          {levelInfo.lvl >= 10 && (
+            <button onClick={activateBoost} className="w-full mt-2 bg-gradient-to-r from-yellow-600 to-yellow-800 border border-yellow-500 text-white font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-2 hover:brightness-110 animate-pulse">
+                <Briefcase size={16} /> MANAGER BOOST (1H)
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
 
 // --- MAIN APP ---
-export default function StrangerPhoningFinal() {
-  const [user, setUser] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [collaborators, setCollaborators] = useState<any[]>([]);
-  const [historyList, setHistoryList] = useState<any[]>([]);
+export default function StrangerPhoningUltimate() {
+  const [user, setUser] = useState(null);
+  const [collaborators, setCollaborators] = useState([]);
+  const [historyList, setHistoryList] = useState([]);
   const [viewMode, setViewMode] = useState('splash');
-  const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const [myPlayerId, setMyPlayerId] = useState(null);
+  
+  const [loginStep, setLoginStep] = useState('NAME');
+  const [joinName, setJoinName] = useState('');
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [inactivityAlert, setInactivityAlert] = useState(false);
   
   const [isMuted, setIsMuted] = useState(false);
   const [isMusicMuted, setIsMusicMuted] = useState(false);
   const [isUpsideDown, setIsUpsideDown] = useState(false);
-  const [flashId, setFlashId] = useState<string | null>(null);
+  const [isShaking, setIsShaking] = useState(false); 
+  const [activeSpecialEffect, setActiveSpecialEffect] = useState(null);
+  const [flashId, setFlashId] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [joinName, setJoinName] = useState('');
-  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
-  const [celebration, setCelebration] = useState<{name: string, title: string, type: 'player' | 'coach', icon: string} | null>(null);
-  
-  // --- ETAT POUR LA MODALE DE SUPPRESSION ---
-  const [playerToDelete, setPlayerToDelete] = useState<any>(null);
+  const [playerToDelete, setPlayerToDelete] = useState(null);
+  const [deleteCode, setDeleteCode] = useState(''); // NEW: Delete Code State
+  const [celebration, setCelebration] = useState(null);
+  const [carAnimation, setCarAnimation] = useState(null);
+  const [levelUpNotification, setLevelUpNotification] = useState(null);
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  const [powerNotification, setPowerNotification] = useState(null);
 
   const isMutedRef = useRef(isMuted);
-  const prevRdvsRef = useRef<{[key: string]: number}>({});
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const prevStatsRef = useRef({});
+  const audioRef = useRef(null);
+  const upsideDownTimerRef = useRef(null);
 
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
   useEffect(() => {
     if (audioRef.current) {
-      const shouldPlayMusic = viewMode === 'admin' && !isMusicMuted;
-      if (shouldPlayMusic) {
+      if (viewMode === 'admin' && !isMusicMuted) {
         audioRef.current.volume = 0.4;
-        if (audioRef.current.paused) audioRef.current.play().catch(e => console.log("Lecture auto bloquée", e));
+        audioRef.current.play().catch(e => {});
       } else {
         audioRef.current.pause();
       }
     }
   }, [viewMode, isMusicMuted]);
 
-  // 1. Auth
   useEffect(() => {
-    const initAuth = async () => {
-      try { await signInAnonymously(auth); } 
-      catch (err: any) { setErrorMsg("Erreur Connexion: " + (err).message); }
-      setAuthLoading(false);
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if(u) setAuthLoading(false);
-    });
+    signInAnonymously(auth);
+    onAuthStateChanged(auth, u => setUser(u));
     const savedId = localStorage.getItem('stranger_player_id');
     if (savedId) setMyPlayerId(savedId);
-    return () => unsubscribe();
   }, []);
 
-  // 2. Sync
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.metadata.hasPendingWrites) {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'modified') {
-            const newData = change.doc.data();
-            const oldRdv = prevRdvsRef.current[change.doc.id] || 0;
-            const newRdv = newData.rdvs || 0;
+    onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'modified') {
+          const newData = change.doc.data();
+          const oldData = prevStatsRef.current[change.doc.id] || {};
+          const oldRdv = oldData.rdvs || 0;
+          const oldCalls = oldData.calls || 0;
+          const oldLifetime = oldData.lifetimeRdvs || 0;
+          
+          // --- LEVEL UP DETECTION ---
+          const oldLevel = getLevelInfo(oldLifetime);
+          const newLevel = getLevelInfo(newData.lifetimeRdvs || 0);
 
-            if (newRdv > oldRdv) {
-              const cycle = newRdv % 3;
-              if (cycle === 1) {
-                setCelebration({ name: newData.name, title: "BRAVO", type: 'player', icon: "👍" });
-              } else if (cycle === 2) {
-                setCelebration({ name: newData.name, title: "CONTINUE !", type: 'coach', icon: "🔥" });
-              } else { 
-                setCelebration({ name: newData.name, title: "AMAZING !!!", type: 'coach', icon: "🚀" });
-              }
-              setTimeout(() => setCelebration(null), 3500);
-
-              if (newRdv > 0 && newRdv % 3 === 0) playSound('superJackpot', isMutedRef.current);
-              else playSound('jackpot', isMutedRef.current);
-              
-              setFlashId(change.doc.id);
-              setTimeout(() => setFlashId(null), 800);
-            }
+          if (newLevel.lvl > oldLevel.lvl) {
+              // Trigger Level Up
+              playSound('levelUp', isMutedRef.current);
+              setLevelUpNotification({ name: newLevel.name, lvl: newLevel.lvl });
+              setTimeout(() => setLevelUpNotification(null), 5000);
           }
-        });
-      }
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const newRefMap: any = {};
-      data.forEach((d: any) => newRefMap[d.id] = d.rdvs || 0);
-      prevRdvsRef.current = newRefMap;
-      data.sort((a: any, b: any) => {
-        if ((b.rdvs || 0) !== (a.rdvs || 0)) return (b.rdvs || 0) - (a.rdvs || 0);
-        return (b.calls || 0) - (a.calls || 0);
+
+          // LOGIQUE RDV
+          if (newData.rdvs > oldRdv) {
+            const cycle = newData.rdvs % 3;
+            let title = "BRAVO";
+            let type = "player";
+            if (cycle === 2) { title = "CONTINUE !"; type = "coach"; }
+            if (cycle === 0) { title = "AMAZING !!!"; type = "coach"; }
+            
+            setCelebration({ name: newData.name, title, type, icon: cycle === 0 ? "🚀" : (cycle === 2 ? "🔥" : "👍") });
+            setTimeout(() => setCelebration(null), 3500);
+            
+            // LOGIQUE SONORE MISE À JOUR
+            if (newData.rdvs > 0 && newData.rdvs % 3 === 0) {
+                playSound('superJackpotFun', isMutedRef.current);
+            } else {
+                playSound('coin', isMutedRef.current);
+            }
+            
+            setFlashId(change.doc.id);
+            setTimeout(() => setFlashId(null), 800);
+          }
+
+          // LOGIQUE APPELS
+          if (newData.calls > oldCalls) {
+              if (newData.calls > 0 && newData.calls % 10 === 0) {
+                  setCarAnimation({ name: newData.name });
+                  playSound('carHorn', isMutedRef.current);
+                  setTimeout(() => setCarAnimation(null), 4000);
+              }
+          }
+        }
       });
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const newRefMap = {};
+      data.forEach(d => newRefMap[d.id] = { rdvs: d.rdvs || 0, calls: d.calls || 0, lifetimeRdvs: d.lifetimeRdvs || 0 });
+      prevStatsRef.current = newRefMap;
+      data.sort((a, b) => (b.rdvs || 0) - (a.rdvs || 0) || (b.calls || 0) - (a.calls || 0));
       setCollaborators(data);
-    }, (err) => {
-      if (user) setErrorMsg("Erreur Sync: Vérifiez vos règles Firestore");
     });
-    return () => unsubscribe();
   }, [user]);
 
-  // 3. History
   useEffect(() => {
-    if (viewMode === 'history' && user) {
-      const fetchHistory = async () => {
-        try {
-          const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_HISTORY), orderBy('archivedAt', 'desc'));
-          const snap = await getDocs(q);
-          setHistoryList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (e) { console.error(e); }
-      };
-      fetchHistory();
-    }
-  }, [viewMode, user]);
-
-  const startMusic = () => {
-    if (audioRef.current) {
-      // @ts-ignore
-      audioRef.current.volume = 0.4;
-      // @ts-ignore
-      audioRef.current.play().catch(e => console.log("Autoplay bloqué", e));
-    }
-  };
-
-  const handleAdminSequence = (e: any) => { e.stopPropagation(); playSound('click', isMuted); startMusic(); setViewMode('admin_intro'); };
-  const onIntroEnded = () => { setViewMode('admin'); };
-  const handlePlayerStart = () => { playSound('click', isMuted); startMusic(); if (myPlayerId && collaborators.some((c) => c.id === myPlayerId)) { setViewMode('player'); } else { setViewMode('setup'); } };
-
-  const joinGame = async (e: any) => {
-    e.preventDefault();
-    const nameToJoin = joinName.trim();
-    if (!nameToJoin) return;
-    if (!user) { alert("Connexion..."); return; }
-    try {
-      playSound('click', isMuted);
-      const existingPlayer = collaborators.find((c) => c.name.toLowerCase() === nameToJoin.toLowerCase());
-      if (existingPlayer) {
-        setMyPlayerId(existingPlayer.id);
-        localStorage.setItem('stranger_player_id', existingPlayer.id);
-        setJoinName('');
-        setViewMode('player');
-        alert(`Bon retour ${existingPlayer.name} !`);
-      } else {
-        const docRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT), {
-          name: nameToJoin, calls: 0, rdvs: 0, createdAt: Date.now()
-        });
-        setMyPlayerId(docRef.id);
-        localStorage.setItem('stranger_player_id', docRef.id);
-        setJoinName('');
-        setViewMode('player');
-      }
-    } catch (err: any) { alert("Erreur ajout : " + (err).message); }
-  };
-
-  // --- NOUVELLE FONCTION DE SUPPRESSION (SÛRE) ---
-  const confirmDelete = async () => {
-    if (!playerToDelete) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, playerToDelete.id));
-      if (playerToDelete.id === myPlayerId) logout();
-      setPlayerToDelete(null); // Ferme la modale
-      playSound('click', isMuted);
-    } catch (e: any) {
-      alert("Erreur suppression: " + e.message);
-    }
-  };
-
-  const updateStats = async (id: string, field: string, delta: number, isRdv = false) => {
-    const player = collaborators.find((c) => c.id === id);
-    if (!player) return;
-    const newVal = Math.max(0, (player[field] || 0) + delta);
-    
-    if (delta > 0) {
-      if (isRdv) {
-        const cycle = newVal % 3;
-        if (cycle === 1) {
-          setCelebration({ name: player.name, title: "BRAVO", type: 'player', icon: "👍" });
-        } else if (cycle === 2) {
-          setCelebration({ name: player.name, title: "CONTINUE !", type: 'coach', icon: "🔥" });
-        } else { 
-          setCelebration({ name: player.name, title: "AMAZING !!!", type: 'coach', icon: "🚀" });
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_EVENTS), orderBy('timestamp', 'desc'), limit(1));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      if (!snap.empty) {
+        const event = snap.docs[0].data();
+        if (Date.now() - event.timestamp < 5000) {
+          
+          if (event.type === 'taunt') {
+            playSound('taunt', isMutedRef.current);
+            setActiveSpecialEffect({ type: 'taunt', senderName: event.senderName });
+            setTimeout(() => setActiveSpecialEffect(null), 4000);
+          } 
+          else if (event.type === 'wizz') {
+            playSound('wizz', isMutedRef.current);
+            setIsShaking(true);
+            setPowerNotification({ user: event.senderName, power: "SHAKE" }); // Afficher qui lance
+            setTimeout(() => { setIsShaking(false); setPowerNotification(null); }, 3000);
+          } 
+          else if (event.type === 'upside') {
+            playSound('upside', isMutedRef.current);
+            setIsUpsideDown(true);
+            setPowerNotification({ user: event.senderName, power: "UPSIDE DOWN" }); // Afficher qui lance
+            setTimeout(() => setPowerNotification(null), 3000); // Cacher notification après 3s
+            
+            if (upsideDownTimerRef.current) clearTimeout(upsideDownTimerRef.current);
+            upsideDownTimerRef.current = setTimeout(() => setIsUpsideDown(false), 60000);
+          }
+          else if (event.type === 'manager_boost') {
+            playSound('coin', isMutedRef.current);
+            setAdminNotifications(prev => [...prev, `${event.senderName} réclame son BOOST MANAGER !`]);
+          }
         }
-        setTimeout(() => setCelebration(null), 3500);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-        if (newVal > 0 && newVal % 3 === 0) playSound('superJackpot', isMuted);
-        else playSound('jackpot', isMuted);
-        setFlashId(id);
-        setTimeout(() => setFlashId(null), 800);
-      } else if (field === 'calls' && newVal > 0 && newVal % 10 === 0) {
-         setCelebration({ name: player.name, title: "GO GO GO !!!", type: 'coach', icon: "📣" });
-         setTimeout(() => setCelebration(null), 3500);
-         playSound('carPass', isMuted);
-      } else { 
-        playSound('click', isMuted); 
+  const handleJoinStep1 = (e) => {
+    e.preventDefault();
+    const name = joinName.trim();
+    if (!name) return;
+    playSound('click', isMuted);
+    const existing = collaborators.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) setLoginStep('AUTH_PIN'); else setLoginStep('CREATE_PIN');
+  };
+
+  const handleJoinStep2 = async (e) => {
+    e.preventDefault();
+    if (pinInput.length !== 6) { setPinError("Le code doit faire 6 chiffres"); playSound('error', isMuted); return; }
+    playSound('click', isMuted);
+    const name = joinName.trim();
+    const now = Date.now();
+
+    if (loginStep === 'CREATE_PIN') {
+      const d = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT), { 
+        name, calls: 0, rdvs: 0, lifetimeRdvs: 0, powersUsed: 0, pin: pinInput, notes: { J1: '', J2: '', J3: '' }, createdAt: now, lastActive: now 
+      });
+      setMyPlayerId(d.id);
+      localStorage.setItem('stranger_player_id', d.id);
+      setViewMode('player');
+      setLoginStep('NAME');
+      setPinInput('');
+    } 
+    else if (loginStep === 'AUTH_PIN') {
+      const existing = collaborators.find(c => c.name.toLowerCase() === name.toLowerCase());
+      if (existing && existing.pin === pinInput) {
+        if (existing.lastActive && (now - existing.lastActive > INACTIVITY_LIMIT)) {
+           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, existing.id), { lifetimeRdvs: 0, lastActive: now });
+           setInactivityAlert(true);
+        } else {
+           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, existing.id), { lastActive: now });
+        }
+        setMyPlayerId(existing.id);
+        localStorage.setItem('stranger_player_id', existing.id);
+        setViewMode('player');
+        setLoginStep('NAME');
+        setPinInput('');
+      } else {
+        setPinError("Code Incorrect !");
+        playSound('error', isMuted);
+        setPinInput('');
       }
     }
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, id), { [field]: newVal });
   };
 
-  const archiveAndResetDay = async () => {
-    const todayStr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    const archiveData = {
-      dateLabel: todayStr, archivedAt: Date.now(),
-      totalCalls: collaborators.reduce((acc, c: any) => acc + (c.calls || 0), 0),
-      totalRdvs: collaborators.reduce((acc, c: any) => acc + (c.rdvs || 0), 0),
-      players: collaborators.map((c: any) => ({ name: c.name, calls: c.calls, rdvs: c.rdvs }))
-    };
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_HISTORY), archiveData);
-    const batch = writeBatch(db);
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT));
-    const snap = await getDocs(q);
-    snap.docs.forEach((d) => batch.update(d.ref, { calls: 0, rdvs: 0 }));
-    await batch.commit();
-    setShowResetConfirm(false);
-    playSound('success', isMuted);
+  const updateStats = async (id, field, delta) => {
+    const p = collaborators.find(c => c.id === id);
+    const newVal = Math.max(0, (p[field] || 0) + delta);
+    if (delta > 0) playSound('click', isMuted);
+    
+    const updates = { [field]: newVal, lastActive: Date.now() };
+    if (field === 'rdvs' && delta > 0) {
+      updates.lifetimeRdvs = (p.lifetimeRdvs || 0) + 1;
+    }
+    if (field === 'rdvs' && delta < 0) {
+       updates.lifetimeRdvs = Math.max(0, (p.lifetimeRdvs || 0) - 1);
+    }
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, id), updates);
   };
 
-  const logout = () => { localStorage.removeItem('stranger_player_id'); setMyPlayerId(null); setViewMode('setup'); };
+  const usePower = async (type) => {
+    if (!myPlayerId) return;
+    const me = collaborators.find(c => c.id === myPlayerId);
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myPlayerId), { powersUsed: (me.powersUsed || 0) + 1, lastActive: Date.now() });
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_EVENTS), { type, senderName: me.name, timestamp: Date.now() });
+  };
 
-  const totalRdvs = collaborators.reduce((acc, c: any) => acc + (c.rdvs || 0), 0);
-  const totalCalls = collaborators.reduce((acc, c: any) => acc + (c.calls || 0), 0);
-  const leaderId = collaborators.length > 0 && collaborators[0].rdvs > 0 ? collaborators[0].id : null;
-  const myPlayer = collaborators.find((c: any) => c.id === myPlayerId);
-  const myRank = myPlayer ? collaborators.findIndex((c: any) => c.id === myPlayerId) + 1 : null;
+  const confirmDelete = async () => {
+    if (playerToDelete) {
+      // --- NEW: ADMIN CODE CHECK ---
+      if (deleteCode !== '240113') {
+          alert("CODE ADMIN INCORRECT ! ACCÈS REFUSÉ.");
+          return;
+      }
 
-  // Style du conteneur principal (Rotation Upside Down + Effet Dark)
-  const mainContainerClass = `min-h-screen text-white transition-all duration-1000 ease-in-out relative 
-    ${isUpsideDown 
-       ? 'rotate-180 saturate-[0.2] brightness-[0.6] contrast-125 bg-black' 
-       : 'bg-transparent'
-    }`;
-  
-  if (errorMsg) return <div className="min-h-screen bg-slate-950 flex items-center justify-center p-8 text-center"><div className="bg-red-900/20 border border-red-500 p-6 rounded-xl text-red-400"><AlertCircle className="mx-auto mb-4" size={48} /><h2 className="text-xl font-bold mb-2">Problème Config</h2><p className="whitespace-pre-wrap">{errorMsg}</p></div></div>;
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, playerToDelete.id));
+      if (playerToDelete.id === myPlayerId) { localStorage.removeItem('stranger_player_id'); setMyPlayerId(null); setViewMode('setup'); }
+      setPlayerToDelete(null);
+      setDeleteCode('');
+    }
+  };
+
+  const myPlayer = collaborators.find(c => c.id === myPlayerId);
+  const upsideClass = isUpsideDown ? 'rotate-180 saturate-[0.2] brightness-[0.6] contrast-125 bg-black' : '';
+  const shakeClass = isShaking ? 'animate-shake' : '';
+  const playerViewEffects = viewMode === 'player' ? `${upsideClass} ${shakeClass}` : '';
 
   return (
-    <div className={mainContainerClass}>
-      {/* FOND D'ECRAN GLOBAL */}
+    <div className={`min-h-screen text-white transition-all duration-1000 ease-in-out relative ${playerViewEffects}`}>
+      <style>{`@keyframes shake { 0%,100% {transform:translateX(0);} 10%,30%,50%,70%,90% {transform:translateX(-10px) translateY(5px);} 20%,40%,60%,80% {transform:translateX(10px) translateY(-5px);} } .animate-shake {animation:shake 0.5s cubic-bezier(.36,.07,.19,.97) both;}`}</style>
       <AppBackground />
-
-      {/* Effet de particules "Spores" en mode Upside Down */}
-      {isUpsideDown && <UpsideDownParticles />}
-
-      <audio ref={audioRef} src={BACKGROUND_MUSIC_URL} loop />
+      {isUpsideDown && <div className="fixed inset-0 pointer-events-none z-50"><div className="w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 animate-pulse"></div></div>}
       
+      <audio ref={audioRef} src={BACKGROUND_MUSIC_URL} loop />
+      <SpecialEffectsLayer activeEffect={activeSpecialEffect} />
+      {levelUpNotification && <LevelUpOverlay levelName={levelUpNotification.name} levelNum={levelUpNotification.lvl} />}
       {celebration && <CelebrationOverlay name={celebration.name} title={celebration.title} type={celebration.type} icon={celebration.icon} />}
-
-      {/* MODALE DE SUPPRESSION PERSONNALISÉE */}
+      {carAnimation && <CarAnimationOverlay name={carAnimation.name} />}
+      
+      {/* --- UPDATED DELETE CONFIRMATION MODAL --- */}
       {playerToDelete && (
-        <DeleteConfirmModal 
-          name={playerToDelete.name} 
-          onConfirm={confirmDelete} 
-          onCancel={() => setPlayerToDelete(null)} 
-        />
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-4">
+              <div className="bg-slate-900 border-2 border-red-600 rounded-2xl p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(220,38,38,0.5)]">
+                  <h3 className="text-2xl font-black mb-2 text-white">CONFIRMER SUPPRESSION ?</h3>
+                  <p className="text-red-400 mb-6 font-bold uppercase tracking-wider">{playerToDelete.name}</p>
+                  
+                  <div className="mb-6">
+                      <label className="block text-xs text-slate-500 uppercase mb-2 font-bold">Code de Sécurité Requis</label>
+                      <input 
+                          type="password" 
+                          value={deleteCode}
+                          onChange={(e) => setDeleteCode(e.target.value)}
+                          placeholder="******"
+                          autoFocus
+                          className="w-full bg-black border border-red-800 text-white text-center text-2xl p-3 rounded font-mono tracking-[0.5em] focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-900"
+                      />
+                  </div>
+
+                  <div className="flex gap-4">
+                      <button onClick={() => {setPlayerToDelete(null); setDeleteCode('');}} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded font-bold transition-colors">ANNULER</button>
+                      <button onClick={confirmDelete} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded font-bold transition-colors shadow-lg shadow-red-900/20">SUPPRIMER</button>
+                  </div>
+              </div>
+          </div>
       )}
 
+      {/* INACTIVITY ALERT */}
+      {inactivityAlert && (
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center p-4">
+              <div className="bg-slate-900 border-2 border-red-600 rounded-2xl p-8 max-w-md w-full text-center">
+                  <Skull size={64} className="mx-auto text-red-500 mb-4 animate-bounce" />
+                  <h3 className="text-2xl font-black mb-4 text-red-500">INACTIVITÉ DÉTECTÉE</h3>
+                  <p className="text-slate-300 mb-6">Vous avez été absent plus de 15 jours. Vos niveaux ont été perdus dans le Monde à l'Envers.</p>
+                  <button onClick={() => setInactivityAlert(false)} className="w-full py-3 bg-red-600 rounded font-bold">J'ACCEPTE MON SORT</button>
+              </div>
+          </div>
+      )}
+
+      {/* NOTIFICATION POUVOIR ADMIN (Grosse bannière) */}
+      {viewMode === 'admin' && powerNotification && (
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100] w-full bg-red-600/90 border-y-4 border-yellow-400 py-8 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(255,0,0,0.8)] animate-in zoom-in duration-300 pointer-events-none">
+              <h2 className="text-4xl md:text-6xl font-black uppercase text-yellow-300 drop-shadow-lg text-center px-4 animate-pulse">
+                  ⚠️ {powerNotification.user} ⚠️
+              </h2>
+              <h3 className="text-2xl md:text-4xl font-bold uppercase text-white mt-2 tracking-widest">
+                  LANCE {powerNotification.power} !
+              </h3>
+          </div>
+      )}
+
+      {/* ADMIN NOTIFICATIONS (Boosts, etc.) */}
+      {viewMode === 'admin' && adminNotifications.length > 0 && (
+          <div className="fixed top-24 right-4 z-[80] space-y-2">
+              {adminNotifications.map((notif, i) => (
+                  <div key={i} className="bg-yellow-600 text-white p-4 rounded-lg shadow-lg border-2 border-yellow-400 animate-in slide-in-from-right font-bold flex items-center gap-2">
+                      <Star className="animate-spin" /> {notif}
+                  </div>
+              ))}
+              <button onClick={() => setAdminNotifications([])} className="text-xs text-slate-400 bg-black/50 px-2 py-1 rounded">Clear</button>
+          </div>
+      )}
+
+      {/* --- VIEWS --- */}
       {viewMode === 'splash' && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden">
-          <img src={SPLASH_IMAGE_URL} alt="Background" className="absolute inset-0 w-full h-full object-cover opacity-60" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_0%,black_90%)] pointer-events-none z-10"></div>
-          <div onClick={handlePlayerStart} className="relative z-20 flex flex-col items-center justify-center h-full cursor-pointer group px-4">
-            <h1 className="text-5xl md:text-8xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase drop-shadow-[0_0_15px_rgba(220,38,38,1)] mb-8 animate-pulse text-center" style={{ fontFamily: 'serif' }}>STRANGER PHONING</h1>
-            <div className="mt-4 bg-black/50 p-4 rounded-xl backdrop-blur-sm border border-red-900/30"><p className="text-red-500 font-bold tracking-[0.3em] text-lg animate-bounce group-hover:text-red-400 uppercase">Cliquer pour entrer</p></div>
+          <img src={SPLASH_IMAGE_URL} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+          <div onClick={() => myPlayerId && collaborators.some(c => c.id === myPlayerId) ? setViewMode('player') : setViewMode('setup')} className="relative z-20 flex flex-col items-center cursor-pointer group">
+            <h1 className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase drop-shadow-[0_0_15px_rgba(220,38,38,1)] mb-8 animate-pulse text-center" style={{ fontFamily: 'serif' }}>STRANGER PHONING</h1>
+            <div className="bg-black/50 p-4 rounded-xl border border-red-900/30"><p className="text-red-500 font-bold tracking-[0.3em] animate-bounce uppercase">Cliquer pour entrer</p></div>
           </div>
-          <button onClick={handleAdminSequence} className="absolute bottom-6 right-6 z-30 flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs uppercase tracking-widest bg-black/50 p-2 rounded-lg backdrop-blur"><Monitor size={14} /> Mode Admin / TV</button>
+          <button onClick={(e) => { e.stopPropagation(); setViewMode('admin_intro'); }} className="absolute bottom-6 right-6 z-30 text-slate-400 hover:text-white bg-black/50 p-2 rounded-lg text-xs uppercase"><Monitor size={14} /> Mode Admin</button>
         </div>
       )}
 
       {viewMode === 'admin_intro' && (
-        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center"><button onClick={onIntroEnded} className="absolute top-4 right-4 z-50 text-white/20 hover:text-white transition-colors"><SkipForward size={32} /></button><video src={INTRO_VIDEO_URL} autoPlay playsInline className="w-full h-full object-cover" onEnded={onIntroEnded} onError={() => {console.log("Erreur vidéo, passage à l'admin"); onIntroEnded();}}/></div>
+        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center"><button onClick={() => setViewMode('admin')} className="absolute top-4 right-4 z-50 text-white/20 hover:text-white"><SkipForward size={32} /></button><video src={INTRO_VIDEO_URL} autoPlay playsInline className="w-full h-full object-cover" onEnded={() => setViewMode('admin')} onError={() => setViewMode('admin')} /></div>
       )}
 
       {viewMode === 'admin' && (
-        <div className="min-h-screen font-sans p-6 animate-in fade-in duration-1000">
-          <div className="flex justify-between items-center mb-8 border-b border-red-900/30 pb-4 bg-black/30 backdrop-blur-sm p-4 rounded-xl">
-             <div><h1 className="text-4xl md:text-7xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase drop-shadow-[0_0_10px_rgba(220,38,38,0.8)]" style={{ fontFamily: 'serif' }}>STRANGER PHONING</h1><p className="text-slate-400 tracking-[0.5em] uppercase text-sm mt-1">Admin Console</p></div>
-             <div className="flex gap-8 text-center"><div><div className="text-xs text-slate-400 uppercase">Appels</div><div className="text-3xl font-mono text-blue-400 font-bold">{totalCalls}</div></div><div><div className="text-xs text-slate-400 uppercase">RDV</div><div className="text-4xl font-mono text-red-500 font-bold drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">{totalRdvs}</div></div></div>
+        <div className="min-h-screen p-6 animate-in fade-in duration-1000">
+          <div className="flex justify-between items-center mb-8 bg-black/30 backdrop-blur-sm p-4 rounded-xl border-b border-red-900/30">
+             <div><h1 className="text-4xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase" style={{ fontFamily: 'serif' }}>STRANGER PHONING</h1><p className="text-slate-400 tracking-[0.5em] uppercase text-sm">Admin Console</p></div>
+             <div className="flex gap-8 text-center">
+               <div><div className="text-xs text-slate-400 uppercase">Appels</div><div className="text-3xl font-mono text-blue-400 font-bold">{collaborators.reduce((a,c)=>a+(c.calls||0),0)}</div></div>
+               <div><div className="text-xs text-slate-400 uppercase">RDV</div><div className="text-4xl font-mono text-red-500 font-bold">{collaborators.reduce((a,c)=>a+(c.rdvs||0),0)}</div></div>
+             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-24">
-             {collaborators.map((collab, index) => (
-               <PlayerCard 
-                 key={collab.id} 
-                 player={collab} 
-                 rank={index + 1} 
-                 isLeader={collab.id === leaderId} 
-                 onUpdate={updateStats} 
-                 onRequestDelete={setPlayerToDelete} // Nouveau : passe l'objet à la modale
-                 isAdmin={true} 
-                 showControls={false} 
-                 flashId={flashId} 
-               />
-             ))}
+          {/* APPLICATON DES EFFETS UNIQUEMENT SUR LA GRILLE */}
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-24 transition-all duration-1000 ${upsideClass} ${shakeClass}`}>
+             {collaborators.map((c, i) => (<PlayerCard key={c.id} player={c} rank={i+1} isLeader={c.id === collaborators[0]?.id} onUpdate={updateStats} onRequestDelete={setPlayerToDelete} isAdmin={true} showControls={false} flashId={flashId} />))}
           </div>
           <div className="fixed bottom-6 right-6 flex gap-3 z-50 bg-slate-950/90 p-3 rounded-2xl border border-slate-800 shadow-2xl backdrop-blur">
-            <button onClick={() => setIsUpsideDown(!isUpsideDown)} className={`p-3 rounded-xl border transition-colors ${isUpsideDown ? 'bg-red-900/50 border-red-500 text-red-200' : 'bg-slate-900 border-slate-700 text-slate-400'}`} title="Upside Down Mode"><Ghost size={24}/></button>
-            <div className="w-px bg-slate-800 mx-1"></div>
-            <button onClick={() => setViewMode('splash')} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" title="Exit"><LogOut size={20}/></button>
-            <button onClick={() => setViewMode('history')} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-blue-400 hover:text-white hover:bg-blue-900/50 flex items-center gap-2" title="Historique"><History size={20}/> <span className="hidden md:inline text-xs font-bold uppercase">Archives</span></button>
-            {!showResetConfirm ? (<button onClick={() => setShowResetConfirm(true)} className="p-3 rounded-xl bg-slate-900 border border-red-900/50 text-red-500 hover:bg-red-950 flex items-center gap-2" title="Clôturer Journée"><Archive size={20}/> <span className="hidden md:inline text-xs font-bold uppercase">Clôturer</span></button>) : (<div className="flex gap-2 animate-in slide-in-from-right-5"><button onClick={() => setShowResetConfirm(false)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs">Annuler</button><button onClick={archiveAndResetDay} className="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-xs hover:bg-red-500 shadow-[0_0_15px_rgba(220,38,38,0.5)]">CONFIRMER</button></div>)}
-            <div className="w-px bg-slate-800 mx-1"></div>
-            <button onClick={() => setIsMusicMuted(!isMusicMuted)} className={`p-3 rounded-xl border transition-colors ${isMusicMuted ? 'bg-slate-900 border-slate-700 text-slate-500' : 'bg-blue-900/30 border-blue-500 text-blue-400'}`} title="Musique">{isMusicMuted ? <span className="relative"><Music size={20}/><span className="absolute top-0 right-0 text-red-500 text-xs font-bold">X</span></span> : <Music size={20}/>}</button>
-            <button onClick={() => setIsMuted(!isMuted)} className={`p-3 rounded-xl border transition-colors ${isMuted ? 'bg-slate-900 border-slate-700 text-slate-500' : 'bg-slate-800 border-slate-600 text-white'}`} title="Sons">{isMuted ? <VolumeX size={20}/> : <Volume2 size={20}/>}</button>
-          </div>
-        </div>
-      )}
-
-      {viewMode === 'history' && (
-        <div className="min-h-screen font-sans flex flex-col">
-          <div className="sticky top-0 bg-slate-950/95 backdrop-blur z-50 border-b border-red-900/30 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4"><button onClick={() => setViewMode(myPlayerId ? 'player' : 'admin')} className="bg-slate-900 p-2 rounded-full border border-slate-700 hover:text-white text-slate-400"><ArrowLeft size={20} /></button><h2 className="text-xl font-black text-red-600 tracking-wider flex items-center gap-2"><Archive size={20} /> ARCHIVES</h2></div>
-          </div>
-          <div className="flex-1 p-4 overflow-y-auto">
-            <div className="max-w-2xl mx-auto space-y-4">
-               {historyList.length === 0 && (<div className="text-center text-slate-500 py-12 bg-slate-900/50 rounded-xl border border-slate-800 border-dashed"><Calendar className="mx-auto mb-2 opacity-50" size={32} />Aucune archive.</div>)}
-               {historyList.map((item) => (
-                 <div key={item.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                   <button onClick={() => setExpandedHistoryId(expandedHistoryId === item.id ? null : item.id)} className="w-full flex items-center justify-between p-4 hover:bg-slate-800 transition-colors"><div className="flex items-center gap-4"><div className="bg-slate-800 p-2 rounded text-slate-400"><Calendar size={18} /></div><div className="text-left"><div className="font-bold text-white capitalize text-sm md:text-base">{item.dateLabel}</div><div className="text-xs text-slate-500">{item.totalRdvs} RDV • {item.totalCalls} Appels</div></div></div>{expandedHistoryId === item.id ? <ChevronUp size={18} className="text-slate-500"/> : <ChevronDown size={18} className="text-slate-500"/>}</button>
-                   {expandedHistoryId === item.id && (<div className="p-4 bg-slate-950/50 border-t border-slate-800 animate-in slide-in-from-top-2"><table className="w-full text-sm"><thead><tr className="text-slate-500 border-b border-slate-800"><th className="text-left py-2 font-normal uppercase text-[10px]">Joueur</th><th className="text-right py-2 font-normal uppercase text-[10px]">Calls</th><th className="text-right py-2 font-normal uppercase text-[10px]">RDV</th></tr></thead><tbody>{item.players.sort((a: any, b: any) => b.rdvs - a.rdvs).map((p: any, idx: number) => (<tr key={idx} className="border-b border-slate-800/50 last:border-0"><td className="py-2 text-slate-300 font-medium flex items-center gap-2">{idx === 0 && <Crown size={12} className="text-yellow-500"/>} {p.name}</td><td className="py-2 text-right text-blue-400 font-mono">{p.calls}</td><td className="py-2 text-right text-yellow-500 font-bold font-mono">{p.rdvs}</td></tr>))}</tbody></table></div>)}
-                 </div>
-               ))}
-            </div>
+            <button onClick={() => setIsUpsideDown(!isUpsideDown)} className="p-3 rounded-xl border bg-slate-900 border-slate-700"><Ghost size={24}/></button>
+            <button onClick={() => setViewMode('splash')} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400"><LogOut size={20}/></button>
+            {!showResetConfirm ? (<button onClick={() => setShowResetConfirm(true)} className="p-3 rounded-xl bg-slate-900 border border-red-900/50 text-red-500"><Archive size={20}/></button>) : (<button onClick={async () => {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_HISTORY), { dateLabel: new Date().toLocaleDateString(), archivedAt: Date.now(), players: collaborators });
+                const batch = writeBatch(db);
+                (await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT)))).forEach(d => batch.update(d.ref, { calls: 0, rdvs: 0, powersUsed: 0 }));
+                await batch.commit();
+                setShowResetConfirm(false);
+            }} className="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-xs">CONFIRMER FIN JOURNÉE</button>)}
+            <button onClick={() => setIsMusicMuted(!isMusicMuted)} className={`p-3 rounded-xl border ${isMusicMuted ? 'text-slate-500' : 'text-blue-400'}`}><Music size={20}/></button>
           </div>
         </div>
       )}
 
       {viewMode === 'setup' && (
         <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-md border border-red-900/30 p-8 rounded-2xl shadow-[0_0_50px_rgba(220,38,38,0.1)]">
-            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-purple-600 mb-2 text-center" style={{fontFamily: 'serif'}}>QUI ES-TU ?</h1>
-            <form onSubmit={joinGame} className="flex flex-col gap-4 mt-8">
-              <input type="text" autoFocus value={joinName} onChange={(e) => setJoinName(e.target.value)} className="bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 transition-all" placeholder="Ton Prénom" />
-              <button type="submit" disabled={!joinName.trim() || authLoading} className="bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(220,38,38,0.4)] flex justify-center items-center">{authLoading ? <Activity className="animate-spin" /> : "REJOINDRE"}</button>
-              {authLoading && <p className="text-center text-xs text-slate-500 animate-pulse">Connexion au serveur...</p>}
-            </form>
-            <button onClick={() => setViewMode('splash')} className="w-full mt-4 text-slate-400 text-xs hover:text-slate-200">Retour</button>
+          <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-md border border-red-900/30 p-8 rounded-2xl">
+            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-purple-600 mb-2 text-center" style={{fontFamily: 'serif'}}>ACCÈS SÉCURISÉ</h1>
+            {loginStep === 'NAME' && (
+              <form onSubmit={handleJoinStep1} className="flex flex-col gap-4 mt-8">
+                <input type="text" autoFocus value={joinName} onChange={(e) => setJoinName(e.target.value)} className="bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl font-mono uppercase" placeholder="NOM DE CODE" />
+                <button type="submit" disabled={!joinName.trim()} className="bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl">SUIVANT</button>
+              </form>
+            )}
+            {loginStep === 'CREATE_PIN' && (
+              <form onSubmit={handleJoinStep2} className="flex flex-col gap-4 mt-8 animate-in slide-in-from-right">
+                <div className="text-center text-sm text-slate-300 mb-2">CRÉATION D'UN CODE D'ACCÈS (6 CHIFFRES)</div>
+                <div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" /><input type="password" inputMode="numeric" maxLength={6} autoFocus value={pinInput} onChange={(e) => {setPinInput(e.target.value.replace(/\D/g,'')); setPinError('')}} className="w-full bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl font-mono tracking-[0.5em]" placeholder="------" /></div>
+                {pinError && <div className="text-red-500 text-xs text-center font-bold">{pinError}</div>}
+                <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2"><KeyRound size={20} /> CRÉER ET ENTRER</button>
+                <button type="button" onClick={() => setLoginStep('NAME')} className="text-xs text-slate-500 underline text-center">Retour</button>
+              </form>
+            )}
+            {loginStep === 'AUTH_PIN' && (
+              <form onSubmit={handleJoinStep2} className="flex flex-col gap-4 mt-8 animate-in slide-in-from-right">
+                <div className="text-center text-sm text-slate-300 mb-2">IDENTIFICATION REQUISE POUR <span className="text-red-400 font-bold">{joinName}</span></div>
+                <div className="relative"><Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" /><input type="password" inputMode="numeric" maxLength={6} autoFocus value={pinInput} onChange={(e) => {setPinInput(e.target.value.replace(/\D/g,'')); setPinError('')}} className="w-full bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl font-mono tracking-[0.5em]" placeholder="------" /></div>
+                {pinError && <div className="text-red-500 text-xs text-center font-bold">{pinError}</div>}
+                <button type="submit" className="bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2"><KeyRound size={20} /> DÉVERROUILLER</button>
+                <button type="button" onClick={() => setLoginStep('NAME')} className="text-xs text-slate-500 underline text-center">Retour</button>
+              </form>
+            )}
+            <button onClick={() => setViewMode('splash')} className="w-full mt-4 text-slate-400 text-xs">Retour Accueil</button>
           </div>
         </div>
       )}
 
       {viewMode === 'player' && (
-        <div className="min-h-screen flex flex-col p-4 pb-24">
-          {/* ZONE OUTILS JOUEUR (DÉCONNEXION + UPSIDE DOWN) */}
+        <div className="min-h-screen flex flex-col p-4 pb-24 relative">
           <div className="absolute top-4 right-4 z-50 flex gap-2">
-              <button onClick={logout} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400 hover:text-red-500 transition-colors" title="Déconnexion">
-                  <LogOut size={28} />
-              </button>
-              <button onClick={() => setIsUpsideDown(!isUpsideDown)} className={`p-3 rounded-full border transition-colors ${isUpsideDown ? 'bg-red-900/50 border-red-500 text-red-200' : 'bg-slate-900 border-slate-700 text-slate-400'}`} title="Upside Down Mode">
-                  <Ghost size={28}/>
-              </button>
+              <button onClick={() => {localStorage.removeItem('stranger_player_id'); setMyPlayerId(null); setViewMode('setup');}} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400 hover:text-red-500"><LogOut size={28} /></button>
           </div>
+          <h1 className="text-3xl font-black text-red-600 mb-8 text-center w-full" style={{fontFamily: 'serif'}}>STRANGER PHONING</h1>
           
-          <div className="flex justify-between items-center mb-4"><h1 className="text-3xl font-black text-red-600" style={{fontFamily: 'serif'}}>STRANGER PHONING</h1></div>
-          <div className="flex-1 flex flex-col justify-center"><PlayerCard player={myPlayer} rank={myRank} isLeader={myPlayer.id === leaderId} onUpdate={updateStats} bigMode={true} flashId={flashId} /><div className="mt-6 text-center"><span className="inline-block bg-slate-900/80 backdrop-blur border border-slate-700 px-4 py-2 rounded-full text-sm text-slate-400">Rang actuel : <strong className="text-white">#{myRank}</strong> / {collaborators.length}</span></div></div>
-          <div className="mt-8 grid grid-cols-2 gap-4"><button onClick={() => setViewMode('leaderboard')} className="bg-slate-900/80 backdrop-blur border border-slate-700 hover:bg-slate-700 text-white p-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-colors"><Trophy size={24} className="text-yellow-500"/><span className="text-xs uppercase tracking-widest">Classement</span></button><button onClick={() => setViewMode('history')} className="bg-slate-900/80 backdrop-blur border border-slate-700 hover:bg-slate-700 text-white p-4 rounded-xl flex flex-col items-center justify-center gap-2 font-bold transition-colors"><History size={24} className="text-blue-400"/><span className="text-xs uppercase tracking-widest">Archives</span></button></div>
-        </div>
-      )}
+          {/* FLEX CONTAINER - VERTICAL STACK: CARTE EN HAUT, CARNET EN BAS */}
+          <div className="flex-1 flex flex-col items-center gap-6 w-full max-w-md mx-auto">
+            
+            {/* 1. CARTE JOUEUR (HAUT) */}
+            <div className="w-full">
+                <PlayerCard player={myPlayer} rank={collaborators.findIndex(c => c.id === myPlayerId) + 1} isLeader={myPlayerId === collaborators[0]?.id} onUpdate={updateStats} onUsePower={usePower} bigMode={true} flashId={flashId} showControls={true} />
+            </div>
 
-      {viewMode === 'leaderboard' && (
-        <div className="min-h-screen text-gray-100 p-4">
-          <div className="flex items-center gap-4 mb-6 sticky top-0 z-50 py-4 border-b border-slate-800"><button onClick={() => setViewMode('player')} className="bg-slate-900 p-2 rounded-full border border-slate-700 hover:text-white text-slate-400"><ArrowLeft size={20} /></button><h2 className="text-xl font-bold">Classement Général</h2></div>
-          <div className="space-y-3">{collaborators.map((collab, index) => (<div key={collab.id} className={`flex items-center p-3 rounded-lg border ${collab.id === myPlayerId ? 'bg-slate-800/80 border-red-500/50' : 'bg-slate-900/80 border-slate-800'} backdrop-blur-sm`}><div className="w-8 h-8 flex items-center justify-center font-bold text-slate-500 mr-3 bg-slate-950 rounded">{index + 1}</div><div className="flex-1"><div className="font-bold text-white">{collab.name} {collab.id === myPlayerId && '(Moi)'}</div><div className="text-xs text-slate-500">{collab.calls} appels</div></div><div className="text-yellow-500 font-bold font-mono text-xl">{collab.rdvs} <span className="text-xs text-yellow-700">RDV</span></div></div>))}</div>
+            {/* 2. CARNET DE NOTES (BAS) */}
+            <RetroNotepad myId={myPlayerId} initialData={myPlayer?.notes} myName={myPlayer?.name} currentLevel={getLevelInfo(myPlayer?.lifetimeRdvs)} noteThemeIndex={myPlayer?.noteThemeIndex || 0} />
+
+          </div>
+          <ChatSystem myName={myPlayer?.name} myId={myPlayerId} />
         </div>
       )}
     </div>
