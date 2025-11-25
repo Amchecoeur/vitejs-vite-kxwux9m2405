@@ -63,7 +63,7 @@ const SPLASH_IMAGE_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vi
 const BACKGROUND_MAIN_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/main/public/assets/images/fond.JPG";
 // Liens originaux Discord/CDN pour la version classique
 const INTRO_VIDEO_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/3693163d0ac91109846852ad4aaadb4ff4d620d1/public/assets/video/intro.mp4"; 
-const BACKGROUND_MUSIC_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1442069978101583872/strangersthings.mp3?ex=69256953&is=692417d3&hm=3865516ba4d17dd398345bd6cdaa34fba44509c47367944f169ac93e106c2452&";
+const BACKGROUND_MUSIC_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/0f0de90b192a639663ac641aa4ac1a93c4c14753/public/assets/sounds/strangersthings.mp3";
 
 // --- THEMES & COLORS ---
 const THEMES = [
