@@ -62,7 +62,7 @@ const INACTIVITY_LIMIT = 15 * 24 * 60 * 60 * 1000;
 const SPLASH_IMAGE_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/main/public/assets/images/fond.JPG";
 const BACKGROUND_MAIN_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/main/public/assets/images/fond.JPG";
 // Liens originaux Discord/CDN pour la version classique
-const INTRO_VIDEO_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1441718480696246293/aHR0cHM6Ly9hc3NldHMueC5haS91c2Vycy80ODc2Y2Y1Yi0zMGU4LTQ3YTUtOTExNS0xOTMyMDhmN2Q1MTcvZ2VuZXJhdGVkL2I5NGMwOTdlLTc5MTktNDg2YS05NjBhLWExOTZkZGQwN2YxMC9nZW5lcmF0ZWRfdmlkZW8ubXA0.mov?ex=69257377&is=692421f7&hm=684cbd8d14aae26fb8114862a4c78605ffce569766f78d8099a57de1d4b710e5&"; 
+const INTRO_VIDEO_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/3693163d0ac91109846852ad4aaadb4ff4d620d1/public/assets/video/intro.mp4"; 
 const BACKGROUND_MUSIC_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1442069978101583872/strangersthings.mp3?ex=69256953&is=692417d3&hm=3865516ba4d17dd398345bd6cdaa34fba44509c47367944f169ac93e106c2452&";
 
 // --- THEMES & COLORS ---
