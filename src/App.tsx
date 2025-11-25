@@ -28,8 +28,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ⚠️ ID UNIQUE POUR CETTE NOUVELLE APPLICATION (MADA) ⚠️
-const appId = 'stranger-phoning-mada'; 
+// ⚠️ ID ORIGINAL (VERSION CLASSIQUE) ⚠️
+const appId = 'strangers-phoning-event-final';
 
 const COLL_CURRENT = 'stranger-phoning-team-v2';
 const COLL_HISTORY = 'stranger-phoning-history';
@@ -58,10 +58,12 @@ const getLevelInfo = (lifetimeRdvs) => {
 
 const INACTIVITY_LIMIT = 15 * 24 * 60 * 60 * 1000; 
 
-// --- ASSETS MADA (SANS VIDÉO) ---
-const SPLASH_IMAGE_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/d938d76f01d070317e6d4f05b48e6c94c03e22b9/public/assets/images/madafond.jpeg";
-const BACKGROUND_MAIN_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/d938d76f01d070317e6d4f05b48e6c94c03e22b9/public/assets/images/madafond.jpeg";
-const BACKGROUND_MUSIC_URL = "https://cdn.jsdelivr.net/gh/Amchecoeur/vitejs-vite-kxwux9m2405@2affcfe217a381cbe6563655379d7eef23d85951/public/assets/sounds/strangersthings.mp3";
+// --- ASSETS CLASSIQUES (ORIGINAUX) ---
+const SPLASH_IMAGE_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/main/public/assets/images/fond.JPG";
+const BACKGROUND_MAIN_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/main/public/assets/images/fond.JPG";
+// Liens originaux Discord/CDN pour la version classique
+const INTRO_VIDEO_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1441718480696246293/aHR0cHM6Ly9hc3NldHMueC5haS91c2Vycy80ODc2Y2Y1Yi0zMGU4LTQ3YTUtOTExNS0xOTMyMDhmN2Q1MTcvZ2VuZXJhdGVkL2I5NGMwOTdlLTc5MTktNDg2YS05NjBhLWExOTZkZGQwN2YxMC9nZW5lcmF0ZWRfdmlkZW8ubXA0.mov?ex=69257377&is=692421f7&hm=684cbd8d14aae26fb8114862a4c78605ffce569766f78d8099a57de1d4b710e5&"; 
+const BACKGROUND_MUSIC_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1442069978101583872/strangersthings.mp3?ex=69256953&is=692417d3&hm=3865516ba4d17dd398345bd6cdaa34fba44509c47367944f169ac93e106c2452&";
 
 // --- THEMES & COLORS ---
 const THEMES = [
@@ -131,6 +133,7 @@ const playSound = (type, muted) => {
     else if (type === 'eraser') { simpleTone(200, 0.1, 'sawtooth'); }
     else if (type === 'scan') { simpleTone(1200, 0.05, 'square'); setTimeout(() => simpleTone(1200, 0.05, 'square'), 100); } 
     else if (type === 'coin') { 
+        // SON MARIO COIN
         osc.type = 'square';
         osc.frequency.setValueAtTime(988, now);
         osc.frequency.linearRampToValueAtTime(1319, now + 0.08);
@@ -213,12 +216,7 @@ const WalkieTalkieIcon = ({ className }) => (
 
 const AppBackground = () => (
   <div className="fixed inset-0 z-[-1]">
-    <img 
-        src={BACKGROUND_MAIN_URL} 
-        alt="Background" 
-        className="w-full h-full object-cover" 
-        onError={(e) => {e.target.style.display='none';}} 
-    />
+    <img src={BACKGROUND_MAIN_URL} alt="Background" className="w-full h-full object-cover" />
     <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]"></div>
     <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/70"></div>
   </div>
@@ -233,25 +231,16 @@ const LevelUpOverlay = ({ levelName, levelNum }) => {
                     <Star size={56} className="text-yellow-300 animate-bounce delay-100" fill="currentColor" />
                     <Star size={40} className="text-yellow-400 animate-bounce delay-200" fill="currentColor" />
                 </div>
-                
-                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_25px_rgba(234,179,8,0.8)] animate-pulse mb-8">
-                    LEVEL UP!!
-                </h1>
-                
+                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_25px_rgba(234,179,8,0.8)] animate-pulse mb-8">LEVEL UP!!</h1>
                 <div className="flex items-center gap-6 justify-center">
                     <div className="relative w-32 h-32">
-                        <img 
-                            src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=Agent&backgroundColor=transparent`} 
-                            alt="Level Up Avatar" 
-                            className="w-full h-full rounded-full border-4 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.6)] bg-slate-800"
-                        />
+                        <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=Agent&backgroundColor=transparent`} alt="Level Up Avatar" className="w-full h-full rounded-full border-4 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.6)] bg-slate-800"/>
                         <div className="absolute -top-10 -right-24 bg-white text-black font-black p-3 rounded-xl border-4 border-black whitespace-nowrap animate-bounce z-50">
                             Tu es au top !
                             <div className="absolute bottom-[-10px] left-4 w-4 h-4 bg-white border-r-4 border-b-4 border-black transform rotate-45"></div>
                         </div>
                     </div>
                 </div>
-
                 <div className="bg-slate-800/80 border-2 border-yellow-500 px-8 py-4 rounded-xl text-center shadow-2xl transform rotate-1 mt-10">
                     <p className="text-yellow-200 font-bold text-sm uppercase tracking-widest mb-1">NOUVEAU RANG</p>
                     <h2 className="text-4xl font-black text-white uppercase">{levelName}</h2>
@@ -483,7 +472,7 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
   );
 };
 
-// --- CHAT SYSTEM (TALKIE GAUCHE - FENÊTRE DROITE - Z-INDEX MAX) ---
+// --- CHAT SYSTEM (TALKIE GAUCHE - FENÊTRE DROITE) ---
 const ChatSystem = ({ myName, myId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -533,11 +522,11 @@ const ChatSystem = ({ myName, myId }) => {
   };
 
   return (
-    <div className="relative z-[60] flex items-start">
+    <div className="relative z-50 flex items-start">
         {/* BOUTON TALKIE-WALKIE (GAUCHE) */}
         <button 
             onClick={() => setIsOpen(!isOpen)} 
-            className="relative transition-transform hover:scale-110 focus:outline-none z-[60] mr-4"
+            className="relative transition-transform hover:scale-110 focus:outline-none z-50 mr-4"
         >
             <div className={`relative transition-all duration-500 ${hasUnread ? 'animate-bounce' : ''}`}>
                 <WalkieTalkieIcon 
@@ -557,7 +546,7 @@ const ChatSystem = ({ myName, myId }) => {
 
         {/* FENÊTRE DE CHAT (S'OUVRE À DROITE DU TALKIE) */}
         {isOpen && (
-            <div className="absolute top-0 left-24 z-[70] w-80 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-r-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left-10 origin-top-left">
+            <div className="absolute top-0 left-24 z-40 w-80 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-r-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left-10 origin-top-left">
                 <div className="bg-slate-900 p-3 border-b border-slate-700 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                         <WalkieTalkieIcon className="w-5 h-5 text-slate-400"/>
@@ -1285,7 +1274,7 @@ export default function StrangerPhoningUltimate() {
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden">
           <img src={SPLASH_IMAGE_URL} className="absolute inset-0 w-full h-full object-cover opacity-60" />
           <div onClick={() => myPlayerId && collaborators.some(c => c.id === myPlayerId) ? setViewMode('player') : setViewMode('setup')} className="relative z-20 flex flex-col items-center cursor-pointer group">
-            <h1 className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase drop-shadow-[0_0_15px_rgba(220,38,38,1)] mb-8 animate-pulse text-center" style={{ fontFamily: 'serif' }}>STRANGER PHONING MADA</h1>
+            <h1 className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase drop-shadow-[0_0_15px_rgba(220,38,38,1)] mb-8 animate-pulse text-center" style={{ fontFamily: 'serif' }}>STRANGER PHONING</h1>
             <div className="bg-black/50 p-4 rounded-xl border border-red-900/30"><p className="text-red-500 font-bold tracking-[0.3em] animate-bounce uppercase">Cliquer pour entrer</p></div>
           </div>
           <button onClick={(e) => { e.stopPropagation(); setViewMode('admin_intro'); }} className="absolute bottom-6 right-6 z-30 text-slate-400 hover:text-white bg-black/50 p-2 rounded-lg text-xs uppercase"><Monitor size={14} /> Mode Admin</button>
@@ -1293,16 +1282,13 @@ export default function StrangerPhoningUltimate() {
       )}
 
       {viewMode === 'admin_intro' && (
-        // PAS DE VIDÉO -> REDIRECTION DIRECTE
-        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center">
-             <button onClick={() => setViewMode('admin')} className="px-6 py-3 bg-red-600 text-white font-bold rounded-xl animate-pulse">ACCÉDER À LA CONSOLE</button>
-        </div>
+        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center"><button onClick={() => setViewMode('admin')} className="absolute top-4 right-4 z-50 text-white/20 hover:text-white"><SkipForward size={32} /></button><video src={INTRO_VIDEO_URL} autoPlay playsInline className="w-full h-full object-cover" onEnded={() => setViewMode('admin')} onError={() => setViewMode('admin')} /></div>
       )}
 
       {viewMode === 'admin' && (
         <div className="min-h-screen p-6 animate-in fade-in duration-1000">
           <div className="flex justify-between items-center mb-8 bg-black/30 backdrop-blur-sm p-4 rounded-xl border-b border-red-900/30">
-             <div><h1 className="text-4xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase" style={{ fontFamily: 'serif' }}>STRANGER PHONING MADA</h1><p className="text-slate-400 tracking-[0.5em] uppercase text-sm">Admin Console</p></div>
+             <div><h1 className="text-4xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase" style={{ fontFamily: 'serif' }}>STRANGER PHONING</h1><p className="text-slate-400 tracking-[0.5em] uppercase text-sm">Admin Console</p></div>
              <div className="flex gap-8 text-center">
                <div><div className="text-xs text-slate-400 uppercase">Appels</div><div className="text-3xl font-mono text-blue-400 font-bold">{collaborators.reduce((a,c)=>a+(c.calls||0),0)}</div></div>
                <div><div className="text-xs text-slate-400 uppercase">RDV</div><div className="text-4xl font-mono text-red-500 font-bold">{collaborators.reduce((a,c)=>a+(c.rdvs||0),0)}</div></div>
@@ -1372,7 +1358,7 @@ export default function StrangerPhoningUltimate() {
 
               {/* CENTRE: TITRE & CARTE JOUEUR */}
               <div className="flex-1 flex flex-col items-center mx-4">
-                  <h1 className="text-3xl font-black text-red-600 mb-4 text-center" style={{fontFamily: 'serif'}}>STRANGER PHONING MADA</h1>
+                  <h1 className="text-3xl font-black text-red-600 mb-4 text-center" style={{fontFamily: 'serif'}}>STRANGER PHONING</h1>
                   <div className="w-full max-w-md">
                      <PlayerCard player={myPlayer} rank={collaborators.findIndex(c => c.id === myPlayerId) + 1} isLeader={myPlayerId === collaborators[0]?.id} onUpdate={updateStats} onUsePower={usePower} bigMode={true} flashId={flashId} showControls={true} />
                   </div>
