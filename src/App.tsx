@@ -3,13 +3,13 @@ import {
   Phone, Plus, Volume2, VolumeX, Crown, Trophy, Monitor, 
   ArrowLeft, LogOut, Star, Calendar, Archive, 
   History, SkipForward, AlertCircle, Trash2, Music, Ghost, MessageSquare, 
-  Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText, CalendarCheck, ChevronLeft
+  Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText, CalendarCheck, ChevronLeft, Book, Maximize2, X, Radio
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, 
-  onSnapshot, writeBatch, query, getDocs, orderBy, limit 
+  onSnapshot, writeBatch, query, getDocs, orderBy, limit, where 
 } from 'firebase/firestore';
 
 // ==========================================
@@ -34,12 +34,12 @@ const COLL_HISTORY = 'stranger-phoning-history';
 const COLL_CHAT = 'strangers-phoning-chat-global';
 const COLL_EVENTS = 'strangers-phoning-global-events';
 
-// --- LEVELS SYSTEM (BASÉ SUR LIFETIME RDVS) ---
+// --- LEVELS SYSTEM ---
 const LEVELS = [
   { lvl: 1, name: "ROOKIE", unlock: null },
   { lvl: 2, name: "SCOUT", unlock: null },
   { lvl: 3, name: "TROOPER", unlock: "Avatar" },
-  { lvl: 4, name: "DETECTIVE", unlock: null },
+  { lvl: 4, name: "DETECTIVE", unlock: "Computer Skin" },
   { lvl: 5, name: "SHERIFF", unlock: "Card Color" },
   { lvl: 6, name: "HERO", unlock: null },
   { lvl: 7, name: "PSYCHIC", unlock: "Notepad" },
@@ -82,6 +82,14 @@ const NOTEPAD_THEMES = [
   { name: 'Cyber Blue', bg: '#172554', text: '#60a5fa' }
 ];
 
+const COMPUTER_THEMES = [
+  { name: 'Phosphor Green', text: 'text-green-400', border: 'border-green-800', bg: 'bg-green-900/20', active: 'bg-green-900 text-green-400', inactive: 'text-neutral-500 hover:text-green-400' },
+  { name: 'Amber Terminal', text: 'text-amber-500', border: 'border-amber-800', bg: 'bg-amber-900/20', active: 'bg-amber-900 text-amber-400', inactive: 'text-neutral-500 hover:text-amber-400' },
+  { name: 'Cyber Blue', text: 'text-cyan-400', border: 'border-cyan-700', bg: 'bg-cyan-900/20', active: 'bg-cyan-900 text-cyan-400', inactive: 'text-neutral-500 hover:text-cyan-400' },
+  { name: 'Red Alert', text: 'text-red-500', border: 'border-red-800', bg: 'bg-red-900/20', active: 'bg-red-900 text-red-400', inactive: 'text-neutral-500 hover:text-red-400' },
+  { name: 'Monochrome', text: 'text-gray-300', border: 'border-gray-600', bg: 'bg-gray-800/50', active: 'bg-gray-700 text-white', inactive: 'text-neutral-500 hover:text-white' },
+];
+
 const getThemeFromName = (name) => {
   if (!name) return THEMES[0];
   let hash = 0;
@@ -122,6 +130,7 @@ const playSound = (type, muted) => {
     else if (type === 'eraser') { simpleTone(200, 0.1, 'sawtooth'); }
     else if (type === 'scan') { simpleTone(1200, 0.05, 'square'); setTimeout(() => simpleTone(1200, 0.05, 'square'), 100); } 
     else if (type === 'coin') { 
+        // SON MARIO COIN
         osc.type = 'square';
         osc.frequency.setValueAtTime(988, now);
         osc.frequency.linearRampToValueAtTime(1319, now + 0.08);
@@ -157,6 +166,7 @@ const playSound = (type, muted) => {
         setTimeout(() => simpleTone(300, 0.2, 'sawtooth'), 150);
     }
     else if (type === 'levelUp') {
+        // SON MARIO LEVEL UP
         const notes = [
              {f: 392.00, d: 0.08}, {f: 523.25, d: 0.08}, {f: 659.25, d: 0.08}, 
              {f: 783.99, d: 0.08}, {f: 1046.50, d: 0.08}, {f: 1318.51, d: 0.08}, 
@@ -219,25 +229,16 @@ const LevelUpOverlay = ({ levelName, levelNum }) => {
                     <Star size={56} className="text-yellow-300 animate-bounce delay-100" fill="currentColor" />
                     <Star size={40} className="text-yellow-400 animate-bounce delay-200" fill="currentColor" />
                 </div>
-                
-                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_25px_rgba(234,179,8,0.8)] animate-pulse mb-8">
-                    LEVEL UP!!
-                </h1>
-                
+                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_25px_rgba(234,179,8,0.8)] animate-pulse mb-8">LEVEL UP!!</h1>
                 <div className="flex items-center gap-6 justify-center">
                     <div className="relative w-32 h-32">
-                        <img 
-                            src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=Agent&backgroundColor=transparent`} 
-                            alt="Level Up Avatar" 
-                            className="w-full h-full rounded-full border-4 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.6)] bg-slate-800"
-                        />
+                        <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=Agent&backgroundColor=transparent`} alt="Level Up Avatar" className="w-full h-full rounded-full border-4 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.6)] bg-slate-800"/>
                         <div className="absolute -top-10 -right-24 bg-white text-black font-black p-3 rounded-xl border-4 border-black whitespace-nowrap animate-bounce z-50">
                             Tu es au top !
                             <div className="absolute bottom-[-10px] left-4 w-4 h-4 bg-white border-r-4 border-b-4 border-black transform rotate-45"></div>
                         </div>
                     </div>
                 </div>
-
                 <div className="bg-slate-800/80 border-2 border-yellow-500 px-8 py-4 rounded-xl text-center shadow-2xl transform rotate-1 mt-10">
                     <p className="text-yellow-200 font-bold text-sm uppercase tracking-widest mb-1">NOUVEAU RANG</p>
                     <h2 className="text-4xl font-black text-white uppercase">{levelName}</h2>
@@ -248,17 +249,140 @@ const LevelUpOverlay = ({ levelName, levelNum }) => {
     );
 };
 
-// --- NOTEPAD EVOLUTIF (AVEC MODE DÉTECTIVE) ---
+// --- RETRO COMPUTER (RECHERCHE & ANNUAIRE) ---
+const RetroComputer = ({ computerThemeIndex, onUpdateTheme, canCustomize }) => {
+  const [mode, setMode] = useState('siret'); 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [pjWhat, setPjWhat] = useState('');
+  const [pjWhere, setPjWhere] = useState('');
+  const [pjActive, setPjActive] = useState(false);
+
+  const theme = COMPUTER_THEMES[computerThemeIndex % COMPUTER_THEMES.length] || COMPUTER_THEMES[0];
+
+  const handleSiretSearch = async (e) => {
+      e.preventDefault();
+      if (!searchQuery.trim()) return;
+      setIsSearching(true);
+      setSearchResult(null);
+      playSound('scan', false);
+
+      try {
+          const response = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&page=1&per_page=1`);
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+              setSearchResult(data.results[0]);
+          } else {
+              setSearchResult('not_found');
+          }
+      } catch (error) {
+          console.error("Search error", error);
+          setSearchResult('error');
+      }
+      setIsSearching(false);
+  };
+
+  const handlePagesJaunesSearch = (e) => {
+      e.preventDefault();
+      if (!pjWhat.trim()) return;
+      const url = `https://www.pagesjaunes.fr/annuaire/chercherlespros?quoiqui=${encodeURIComponent(pjWhat)}&ou=${encodeURIComponent(pjWhere)}`;
+      window.open(url, 'PagesJaunesSearch', 'width=1200,height=800,left=100,top=100,scrollbars=yes,resizable=yes,status=no,location=no,toolbar=no,menubar=no');
+      setPjActive(true);
+      playSound('click', false);
+  };
+
+  return (
+    <div className="w-full max-w-md h-80 bg-neutral-800 rounded-xl border-4 border-neutral-600 shadow-[0_0_0_2px_#000,0_10px_20px_rgba(0,0,0,0.5)] p-3 flex flex-col relative overflow-hidden transform -rotate-1">
+        <div className="flex-1 bg-black rounded-lg border-2 border-neutral-700 shadow-inner overflow-hidden relative flex flex-col">
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%] pointer-events-none z-20"></div>
+            <div className="flex border-b border-neutral-800 bg-neutral-900/80 p-1 relative z-30 items-center justify-between">
+                 <div className="flex gap-1">
+                    <button onClick={() => setMode('siret')} className={`px-2 py-0.5 text-[9px] rounded font-mono ${mode === 'siret' ? theme.active : theme.inactive}`}>SIRET</button>
+                    <button onClick={() => setMode('pagesjaunes')} className={`px-2 py-0.5 text-[9px] rounded font-mono ${mode === 'pagesjaunes' ? 'bg-yellow-900 text-yellow-400' : 'text-neutral-500 hover:text-yellow-400'}`}>ANNUAIRE</button>
+                 </div>
+                 {canCustomize && (
+                     <button onClick={onUpdateTheme} className="text-neutral-500 hover:text-white p-1" title="Changer l'affichage"><Settings size={10}/></button>
+                 )}
+            </div>
+            <div className="relative z-0 h-full overflow-hidden p-2 font-mono text-xs">
+                {mode === 'siret' && (
+                    <div className={`flex flex-col h-full ${theme.text}`}>
+                         <form onSubmit={handleSiretSearch} className="flex gap-1 mb-2 shrink-0">
+                            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="NOM / SIRET..." className={`flex-1 ${theme.bg} border ${theme.border.replace('border-', 'border-')}/50 ${theme.text} px-2 py-1 focus:outline-none focus:border-current placeholder-current uppercase`} />
+                            <button type="submit" disabled={isSearching} className={`px-2 font-bold border ${theme.border} bg-opacity-20 hover:bg-opacity-40 transition-colors`}>{isSearching ? '...' : '>'}</button>
+                         </form>
+                         <div className={`flex-1 overflow-y-auto scrollbar-hide space-y-2 border ${theme.border} p-2 ${theme.bg}`}>
+                             {searchResult === 'not_found' && <div className="opacity-50 text-center mt-4">CIBLE INCONNUE</div>}
+                             {searchResult && typeof searchResult === 'object' && (
+                                 <div className="space-y-1">
+                                     <div className={`font-bold uppercase border-b ${theme.border} pb-1`}>{searchResult.nom_complet}</div>
+                                     <div className="opacity-70 text-[10px]">{searchResult.siege?.adresse}</div>
+                                     {searchResult.dirigeants && searchResult.dirigeants.length > 0 && (
+                                        <div className={`mt-1 pt-1 border-t ${theme.border}`}>
+                                            <div className="opacity-50 text-[8px]">DIRIGEANT:</div>
+                                            <div>{searchResult.dirigeants[0].nom} {searchResult.dirigeants[0].prenoms}</div>
+                                        </div>
+                                     )}
+                                     <div className={`mt-2 flex justify-between text-[9px] opacity-50 border-t ${theme.border} pt-1`}>
+                                         <span>{searchResult.tranche_effectif_salarie || '?'} SALARIÉS</span>
+                                         <span>{searchResult.etat_administratif}</span>
+                                     </div>
+                                 </div>
+                             )}
+                             {!searchResult && !isSearching && <div className="opacity-30 text-[9px] text-center mt-8">EN ATTENTE DE SAISIE...</div>}
+                         </div>
+                    </div>
+                )}
+                {mode === 'pagesjaunes' && (
+                    <div className="flex flex-col h-full text-yellow-500">
+                        {!pjActive ? (
+                            <>
+                                <div className="text-center text-[10px] mb-2 opacity-70 uppercase tracking-widest border-b border-yellow-900/50 pb-1">3615 PAGES JAUNES</div>
+                                <form onSubmit={handlePagesJaunesSearch} className="space-y-2 flex-1 flex flex-col justify-center">
+                                    <div>
+                                        <label className="text-[9px] opacity-60 block mb-0.5">ACTIVITÉ / NOM</label>
+                                        <input type="text" value={pjWhat} onChange={(e) => setPjWhat(e.target.value)} className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 focus:outline-none focus:border-yellow-600 uppercase" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] opacity-60 block mb-0.5">LOCALITÉ</label>
+                                        <input type="text" value={pjWhere} onChange={(e) => setPjWhere(e.target.value)} className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 focus:outline-none focus:border-yellow-600 uppercase" />
+                                    </div>
+                                    <button type="submit" className="w-full mt-4 border border-yellow-600 bg-yellow-900/20 text-yellow-500 py-2 hover:bg-yellow-600 hover:text-black transition-colors font-bold uppercase text-xs shadow-[0_0_10px_rgba(234,179,8,0.2)]">Lancer la Recherche</button>
+                                </form>
+                            </>
+                        ) : (
+                            <div className="h-full w-full flex flex-col items-center justify-center text-center p-4 space-y-4">
+                                <Radio size={48} className="animate-pulse text-yellow-500"/>
+                                <div className="font-bold text-sm border-y border-yellow-900/50 py-2 w-full">
+                                    LIAISON SATELLITE ACTIVE
+                                </div>
+                                <p className="text-[10px] opacity-70">
+                                    TERMINAL SECONDAIRE OUVERT.<br/>
+                                    CONSULTEZ LA FENÊTRE EXTERNE.
+                                </p>
+                                <button onClick={() => setPjActive(false)} className="mt-4 text-[9px] underline hover:text-white">NOUVELLE RECHERCHE</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+            <div className="absolute bottom-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_5px_red] animate-pulse z-20"></div>
+        </div>
+        <div className="mt-2 text-center">
+            <div className="text-neutral-400 font-bold text-[10px] tracking-widest uppercase">HAWK-9000</div>
+        </div>
+    </div>
+  );
+};
+
+// --- NOTEPAD EVOLUTIF (SIMPLE) ---
 const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex }) => {
   const [activeTab, setActiveTab] = useState('J1');
   const [notes, setNotes] = useState(initialData || { J1: '', J2: '', J3: '' });
   const [isSaving, setIsSaving] = useState(false);
-  const [mode, setMode] = useState('notes'); 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResult, setSearchResult] = useState(null);
-  const [isSearching, setIsSearching] = useState(false);
-
   const timeoutRef = useRef(null);
+
   const themeStyle = NOTEPAD_THEMES[noteThemeIndex % NOTEPAD_THEMES.length] || NOTEPAD_THEMES[0];
   const canCustomize = currentLevel.lvl >= 7;
 
@@ -291,30 +415,9 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { noteThemeIndex: nextIndex });
   };
 
-  const handleSiretSearch = async (e) => {
-      e.preventDefault();
-      if (!searchQuery.trim()) return;
-      setIsSearching(true);
-      setSearchResult(null);
-      playSound('scan', false);
-      try {
-          const response = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&page=1&per_page=1`);
-          const data = await response.json();
-          if (data.results && data.results.length > 0) {
-              setSearchResult(data.results[0]);
-          } else {
-              setSearchResult('not_found');
-          }
-      } catch (error) {
-          console.error("Search error", error);
-          setSearchResult('error');
-      }
-      setIsSearching(false);
-  };
-
   return (
     <div 
-      className="w-full max-w-md min-h-[400px] rounded-lg border-2 flex flex-col font-mono overflow-hidden relative transform rotate-1 lg:mt-0 mt-8 backdrop-blur-md transition-colors duration-500 shadow-2xl"
+      className="w-full max-w-md h-80 rounded-lg border-2 flex flex-col font-mono overflow-hidden relative transform rotate-1 lg:mt-0 mt-8 backdrop-blur-md transition-colors duration-500 shadow-2xl"
       style={{ 
         backgroundColor: themeStyle.bg + 'E6',
         borderColor: themeStyle.text,
@@ -322,91 +425,55 @@ const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex 
       }}
     >
       <div className="h-8 bg-black/50 flex justify-between items-center px-2 border-b border-white/10 shrink-0">
-        <div className="flex items-center gap-2">
-            <button 
-                onClick={() => { setMode(mode === 'notes' ? 'search' : 'notes'); playSound('click', false); }}
-                className={`flex items-center justify-center w-6 h-6 rounded hover:bg-white/20 transition-colors ${mode === 'search' ? 'bg-white/20 text-white' : 'text-slate-400'}`}
-                title="Mode Détective (SIRET)"
-            >
-                <Search size={14} />
-            </button>
-            {mode === 'notes' && (
-                <span className="text-[10px] uppercase font-bold opacity-50 animate-pulse ml-1" style={{color: themeStyle.text}}>
-                    ← clique sur la loupe
-                </span>
-            )}
+        <div className="flex gap-1">
+          {[...Array(3)].map((_, i) => <div key={i} className="w-1.5 h-4 bg-slate-500 rounded-full"></div>)}
         </div>
         <div className="flex items-center gap-2">
-            {canCustomize && mode === 'notes' && (
+            {canCustomize && (
             <button onClick={cycleTheme} className="text-[10px] uppercase font-bold text-white bg-white/20 px-2 py-1 rounded hover:bg-white/30 flex items-center gap-1">
                 <Settings size={10}/> Skin
             </button>
             )}
-            {mode === 'notes' && (
-                <button onClick={clearPage} className="text-white hover:text-red-400 transition-colors" title="Effacer la page">
-                    <Eraser size={14} />
-                </button>
-            )}
+            <button onClick={clearPage} className="text-white hover:text-red-400 transition-colors" title="Effacer la page">
+                <Eraser size={14} />
+            </button>
         </div>
       </div>
-      {mode === 'notes' && (
-        <div className="flex bg-black/20 shrink-0">
-            {['J1', 'J2', 'J3'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-2 font-bold text-xs border-r border-white/10 transition-all ${activeTab === tab ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`} style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}>{tab}</button>
-            ))}
+      
+      <div className="flex bg-black/20 shrink-0">
+        {['J1', 'J2', 'J3'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 py-2 font-bold text-xs border-r border-white/10 transition-all ${activeTab === tab ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
+            style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 relative p-4 overflow-hidden">
+        <textarea
+          value={notes[activeTab] || ''}
+          onChange={handleNoteChange}
+          placeholder={`// Notes du ${activeTab}...`}
+          className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px] font-bold"
+          style={{ 
+            fontFamily: "'Courier New', Courier, monospace",
+            color: themeStyle.text,
+            textShadow: `0 0 2px ${themeStyle.text}40`
+          }}
+        />
+        <div className="absolute bottom-2 right-2 text-[10px] font-bold uppercase flex items-center gap-1">
+          {isSaving ? <span className="animate-pulse opacity-50" style={{color: themeStyle.text}}>...</span> : <span className="flex items-center gap-1 opacity-70" style={{color: themeStyle.text}}><Save size={10}/></span>}
         </div>
-      )}
-      <div className="flex-1 relative p-4 overflow-hidden flex flex-col">
-        {mode === 'notes' ? (
-            <>
-                <textarea value={notes[activeTab] || ''} onChange={handleNoteChange} placeholder={`// Notes du ${activeTab}...`} className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px] font-bold" style={{ fontFamily: "'Courier New', Courier, monospace", color: themeStyle.text, textShadow: `0 0 2px ${themeStyle.text}40` }} />
-                <div className="absolute bottom-2 right-2 text-[10px] font-bold uppercase flex items-center gap-1">{isSaving ? <span className="animate-pulse opacity-50" style={{color: themeStyle.text}}>...</span> : <span className="flex items-center gap-1 opacity-70" style={{color: themeStyle.text}}><Save size={10}/></span>}</div>
-            </>
-        ) : (
-            <div className="w-full h-full flex flex-col animate-in fade-in slide-in-from-left-4" style={{color: themeStyle.text}}>
-                <h3 className="text-xs font-black uppercase border-b border-current pb-2 mb-4 flex items-center gap-2 opacity-70"><FileText size={14}/> DOSSIER D'ENQUÊTE</h3>
-                <form onSubmit={handleSiretSearch} className="flex gap-2 mb-4 shrink-0">
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="SIRET ou NOM..." className="flex-1 bg-black/20 border border-current/30 rounded p-2 text-sm font-mono focus:outline-none focus:border-current uppercase" style={{color: themeStyle.text}} />
-                    <button type="submit" disabled={isSearching} className="px-3 py-2 bg-black/30 border border-current/30 rounded hover:bg-black/50">{isSearching ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <Search size={16}/>}</button>
-                </form>
-                <div className="flex-1 overflow-y-auto text-xs font-mono space-y-2 pr-1 custom-scrollbar">
-                    <style>{`.custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }`}</style>
-                    {searchResult === 'not_found' && <div className="opacity-50 italic text-center py-4">⚠️ CIBLE INTROUVABLE</div>}
-                    {searchResult === 'error' && <div className="text-red-400 font-bold text-center py-4">ERREUR DE LIAISON SATELLITE</div>}
-                    {searchResult && typeof searchResult === 'object' && (
-                        <div className="space-y-4 pb-4">
-                            <div className="border-2 border-dashed border-current/30 p-3 bg-black/10 relative">
-                                <div className="absolute -top-2 -left-2 text-[40px] opacity-10 pointer-events-none rotate-12 font-black">CONFIDENTIEL</div>
-                                <div className="mb-4 pb-2 border-b border-current/20">
-                                    <div className="opacity-50 text-[9px] uppercase tracking-widest mb-1">CIBLE PRINCIPALE</div>
-                                    <div className="font-black text-base uppercase leading-tight">{searchResult.nom_complet}</div>
-                                    <div className="flex items-center gap-1 mt-1 opacity-70 text-[10px]"><Building size={10} /> SIRET: {searchResult.siege?.siret}</div>
-                                </div>
-                                <div className="mb-3">
-                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold"><MapPin size={10} /> LOCALISATION</div>
-                                    <div className="pl-3 border-l-2 border-current/30">{searchResult.siege?.adresse}</div>
-                                </div>
-                                <div className="mb-3">
-                                    <div className="flex items-center gap-1 opacity-60 text-[9px] uppercase mb-1 font-bold"><User size={10} /> DIRECTION</div>
-                                    <div className="pl-3 border-l-2 border-current/30">{searchResult.dirigeants && searchResult.dirigeants.length > 0 ? (searchResult.dirigeants.map((d, i) => (<div key={i} className="uppercase">{d.prenoms} {d.nom} <span className="opacity-50 text-[9px]">({d.qualite})</span></div>))) : (<div className="italic opacity-50">Donnée non publique</div>)}</div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="bg-black/20 p-2 rounded"><div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1"><Users size={8}/> EFFECTIF</div><div className="font-bold">{searchResult.tranche_effectif_salarie ? searchResult.tranche_effectif_salarie + " Salariés" : "N/A"}</div></div>
-                                    <div className="bg-black/20 p-2 rounded border border-red-900/30 relative overflow-hidden"><div className="opacity-60 text-[8px] uppercase mb-1 font-bold flex items-center gap-1 text-red-400"><DollarSign size={8}/> C.A.</div><div className="font-black text-red-500 text-xs tracking-widest">CLASSIFIÉ</div><div className="absolute top-0 right-0 bottom-0 left-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-10"></div></div>
-                                </div>
-                                <div className="mt-3 pt-2 border-t border-dashed border-current/30 text-[9px] flex justify-between opacity-50"><span>STATUT: {searchResult.etat_administratif === 'A' ? 'ACTIF' : 'INACTIF'}</span><span>CRÉATION: {searchResult.date_creation}</span></div>
-                            </div>
-                        </div>
-                    )}
-                    {!searchResult && !isSearching && (<div className="opacity-30 text-center mt-10 flex flex-col items-center gap-2"><Search size={32} className="animate-pulse"/><p>En attente de saisie...</p></div>)}
-                </div>
-            </div>
-        )}
       </div>
     </div>
   );
 };
 
+// --- CHAT SYSTEM (AVEC PERSISTENCE ET BOUTON FIXE GAUCHE) ---
 const ChatSystem = ({ myName, myId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -416,18 +483,26 @@ const ChatSystem = ({ myName, myId }) => {
   const lastMsgIdRef = useRef(null);
   const isOpenRef = useRef(isOpen); 
 
-  useEffect(() => { isOpenRef.current = isOpen; if (isOpen) { setHasUnread(false); } }, [isOpen]);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+    if (isOpen) {
+        setHasUnread(false);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), orderBy('timestamp', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse();
       setMessages(msgs);
+      
       if (msgs.length > 0) {
           const latest = msgs[msgs.length - 1];
           if (lastMsgIdRef.current && lastMsgIdRef.current !== latest.id) {
               playSound('message', false);
-              if (!isOpenRef.current) { setHasUnread(true); }
+              if (!isOpenRef.current) {
+                  setHasUnread(true);
+              }
           }
           lastMsgIdRef.current = latest.id;
       }
@@ -440,39 +515,67 @@ const ChatSystem = ({ myName, myId }) => {
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), { text: inputText.trim(), senderName: myName, senderId: myId, timestamp: Date.now() });
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT), {
+      text: inputText.trim(), senderName: myName, senderId: myId, timestamp: Date.now()
+    });
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { lastActive: Date.now() });
     setInputText('');
   };
 
-  if (!isOpen) return (
-    <button onClick={() => setIsOpen(true)} className="fixed bottom-24 right-4 z-[60] transition-transform hover:scale-110 active:scale-95 focus:outline-none">
-      <div className={`relative transition-all duration-500 ${hasUnread ? 'animate-bounce' : ''}`}>
-        <WalkieTalkieIcon className={`w-16 h-24 md:w-20 md:h-28 drop-shadow-2xl filter transition-all duration-500 ${hasUnread ? 'text-green-500 drop-shadow-[0_0_20px_rgba(74,222,128,0.9)]' : 'text-red-700 drop-shadow-[0_0_15px_rgba(185,28,28,0.6)]'}`} />
-        {hasUnread && (<span className="absolute -top-2 -right-2 flex h-6 w-6"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-6 w-6 bg-green-500 border-2 border-black"></span></span>)}
-      </div>
-    </button>
-  );
-
   return (
-    <div className="fixed bottom-20 right-4 z-[60] w-80 md:w-96 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-t-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
-      <div className="bg-slate-900 p-3 border-b border-slate-700 flex justify-between items-center">
-        <div className="flex items-center gap-2"><WalkieTalkieIcon className="w-5 h-5 text-slate-400"/><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div><span className="text-xs font-mono uppercase text-slate-300">CHANNEL 4</span></div>
-        <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white"><Minimize2 size={18} /></button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-700">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-3 ${msg.senderId === myId ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className="w-8 h-8 rounded border border-slate-700 bg-slate-800 overflow-hidden shrink-0"><img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(msg.senderName)}`} className="w-full h-full object-cover" /></div>
-            <div className={`flex flex-col max-w-[75%] ${msg.senderId === myId ? 'items-end' : 'items-start'}`}><span className="text-[10px] text-slate-500 uppercase font-bold mb-1">{msg.senderName}</span><div className={`p-2 rounded-lg text-sm font-mono break-words ${msg.senderId === myId ? 'bg-red-900/40 text-red-100 border border-red-800' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>{msg.text}</div></div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-      <form onSubmit={sendMessage} className="p-3 bg-slate-900 border-t border-slate-700 flex gap-2">
-        <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="..." className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 font-mono" />
-        <button type="submit" disabled={!inputText.trim()} className="p-2 bg-red-600 text-white rounded-lg"><Send size={18} /></button>
-      </form>
+    <div className="relative z-50 flex items-start">
+        {/* BOUTON TALKIE-WALKIE (RESTE VISIBLE ET FIXE) */}
+        <button 
+            onClick={() => setIsOpen(!isOpen)} 
+            className="relative transition-transform hover:scale-110 focus:outline-none z-50"
+        >
+            <div className={`relative transition-all duration-500 ${hasUnread ? 'animate-bounce' : ''}`}>
+                <WalkieTalkieIcon 
+                    className={`w-16 h-24 md:w-20 md:h-28 drop-shadow-2xl filter transition-all duration-500 scale-[1.2]
+                    ${hasUnread 
+                        ? 'text-green-500 drop-shadow-[0_0_20px_rgba(74,222,128,0.9)]' 
+                        : 'text-red-700 drop-shadow-[0_0_15px_rgba(185,28,28,0.6)]'}`}
+                />
+                {hasUnread && (
+                    <span className="absolute -top-4 -right-4 flex h-8 w-8">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-8 w-8 bg-green-500 border-4 border-black"></span>
+                    </span>
+                )}
+            </div>
+        </button>
+
+        {/* FENÊTRE DE CHAT (DÉPLIÉE À DROITE DU BOUTON) */}
+        {isOpen && (
+            <div className="absolute top-0 left-24 z-40 w-80 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-r-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left-10 origin-top-left ml-4">
+                <div className="bg-slate-900 p-3 border-b border-slate-700 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <WalkieTalkieIcon className="w-5 h-5 text-slate-400"/>
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                        <span className="text-xs font-mono uppercase text-slate-300">CHANNEL 4</span>
+                    </div>
+                    <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white"><Minimize2 size={18} /></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-700">
+                    {messages.map((msg) => (
+                    <div key={msg.id} className={`flex gap-3 ${msg.senderId === myId ? 'flex-row-reverse' : 'flex-row'}`}>
+                        <div className="w-8 h-8 rounded border border-slate-700 bg-slate-800 overflow-hidden shrink-0">
+                        <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(msg.senderName)}`} className="w-full h-full object-cover" />
+                        </div>
+                        <div className={`flex flex-col max-w-[75%] ${msg.senderId === myId ? 'items-end' : 'items-start'}`}>
+                        <span className="text-[10px] text-slate-500 uppercase font-bold mb-1">{msg.senderName}</span>
+                        <div className={`p-2 rounded-lg text-sm font-mono break-words ${msg.senderId === myId ? 'bg-red-900/40 text-red-100 border border-red-800' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>{msg.text}</div>
+                        </div>
+                    </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
+                <form onSubmit={sendMessage} className="p-3 bg-slate-900 border-t border-slate-700 flex gap-2">
+                    <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="..." className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 font-mono" />
+                    <button type="submit" disabled={!inputText.trim()} className="p-2 bg-red-600 text-white rounded-lg"><Send size={18} /></button>
+                </form>
+            </div>
+        )}
     </div>
   );
 };
@@ -676,7 +779,8 @@ export default function StrangerPhoningUltimate() {
   const [user, setUser] = useState(null);
   const [collaborators, setCollaborators] = useState([]);
   const [historyList, setHistoryList] = useState([]);
-  const [viewMode, setViewMode] = useState('splash');
+  // PERSISTENCE : On charge le mode de vue depuis le stockage local (sauf si admin)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('stranger_view_mode') || 'splash');
   const [myPlayerId, setMyPlayerId] = useState(null);
   
   const [loginStep, setLoginStep] = useState('NAME');
@@ -707,6 +811,57 @@ export default function StrangerPhoningUltimate() {
   const prevStatsRef = useRef({});
   const audioRef = useRef(null);
   const upsideDownTimerRef = useRef(null);
+
+  // PERSISTENCE : Sauvegarde du mode de vue à chaque changement
+  useEffect(() => {
+      localStorage.setItem('stranger_view_mode', viewMode);
+  }, [viewMode]);
+
+  // --- AUTO ARCHIVE LOGIC (18h00) ---
+  const performDailyReset = async () => {
+      try {
+        const todayLabel = new Date().toLocaleDateString();
+        // Check if archived already to prevent double archive
+        const historyRef = collection(db, 'artifacts', appId, 'public', 'data', COLL_HISTORY);
+        const q = query(historyRef, where('dateLabel', '==', todayLabel));
+        const snap = await getDocs(q);
+        
+        if (!snap.empty) return; // Already archived
+
+        // 1. Archive
+        await addDoc(historyRef, { 
+            dateLabel: todayLabel, 
+            archivedAt: Date.now(), 
+            players: collaborators 
+        });
+        
+        // 2. Reset Counters
+        const batch = writeBatch(db);
+        const playersSnap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT)));
+        playersSnap.forEach(d => batch.update(d.ref, { calls: 0, rdvs: 0, powersUsed: 0 }));
+        
+        // 3. Clear Chat (CORRECTION: DELETE ALL MESSAGES)
+        const chatSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', COLL_CHAT));
+        chatSnap.forEach(d => batch.delete(d.ref));
+        
+        await batch.commit();
+        console.log("Auto-Archive completed");
+      } catch (e) {
+          console.error("Archive error", e);
+      }
+  };
+
+  useEffect(() => {
+      const checkTime = () => {
+          const now = new Date();
+          // Check if it is exactly 18:00 (allow a small window to catch it)
+          if (now.getHours() === 18 && now.getMinutes() === 0) {
+              performDailyReset();
+          }
+      };
+      const interval = setInterval(checkTime, 30000); // Check every 30s
+      return () => clearInterval(interval);
+  }, [collaborators]); 
 
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
@@ -888,15 +1043,21 @@ export default function StrangerPhoningUltimate() {
 
   const updateStats = async (id, field, delta) => {
     const p = collaborators.find(c => c.id === id);
-    const newVal = Math.max(0, (p[field] || 0) + delta);
+    const currentVal = p[field] || 0;
+    if (delta < 0 && currentVal === 0) return;
+
+    const newVal = Math.max(0, currentVal + delta);
     if (delta > 0) playSound('click', isMuted);
     
     const updates = { [field]: newVal, lastActive: Date.now() };
-    if (field === 'rdvs' && delta > 0) {
-      updates.lifetimeRdvs = (p.lifetimeRdvs || 0) + 1;
-    }
-    if (field === 'rdvs' && delta < 0) {
-       updates.lifetimeRdvs = Math.max(0, (p.lifetimeRdvs || 0) - 1);
+    if (field === 'rdvs') {
+        if (delta > 0) {
+            updates.lifetimeRdvs = (p.lifetimeRdvs || 0) + 1;
+        } else if (delta < 0) {
+            if (currentVal > 0) {
+                 updates.lifetimeRdvs = Math.max(0, (p.lifetimeRdvs || 0) - 1);
+            }
+        }
     }
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, id), updates);
   };
@@ -923,6 +1084,17 @@ export default function StrangerPhoningUltimate() {
     }
   };
 
+  const cycleComputerTheme = async () => {
+    if (!myPlayerId) return;
+    const me = collaborators.find(c => c.id === myPlayerId);
+    if (!me) return;
+    
+    const currentTheme = me.computerThemeIndex || 0;
+    const nextTheme = (currentTheme + 1) % COMPUTER_THEMES.length;
+    
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myPlayerId), { computerThemeIndex: nextTheme });
+  };
+
   const myPlayer = collaborators.find(c => c.id === myPlayerId);
   const upsideClass = isUpsideDown ? 'rotate-180 saturate-[0.2] brightness-[0.6] contrast-125 bg-black' : '';
   const shakeClass = isShaking ? 'animate-shake' : '';
@@ -934,7 +1106,7 @@ export default function StrangerPhoningUltimate() {
       <AppBackground />
       {isUpsideDown && <div className="fixed inset-0 pointer-events-none z-50"><div className="w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 animate-pulse"></div></div>}
       
-      <audio ref={audioRef} src={BACKGROUND_MUSIC_URL} loop />
+      <audio ref={audioRef} src={BACKGROUND_MUSIC_URL} loop onError={() => console.log("Audio load error - check link validity")} />
       <SpecialEffectsLayer activeEffect={activeSpecialEffect} />
       {levelUpNotification && <LevelUpOverlay levelName={levelUpNotification.name} levelNum={levelUpNotification.lvl} />}
       {celebration && <CelebrationOverlay name={celebration.name} title={celebration.title} type={celebration.type} icon={celebration.icon} />}
@@ -1132,10 +1304,8 @@ export default function StrangerPhoningUltimate() {
             <button onClick={() => setShowArchives(true)} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white"><History size={20}/></button>
             <button onClick={() => setViewMode('splash')} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400"><LogOut size={20}/></button>
             {!showResetConfirm ? (<button onClick={() => setShowResetConfirm(true)} className="p-3 rounded-xl bg-slate-900 border border-red-900/50 text-red-500 hover:bg-red-900/20"><CalendarCheck size={20}/></button>) : (<button onClick={async () => {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', COLL_HISTORY), { dateLabel: new Date().toLocaleDateString(), archivedAt: Date.now(), players: collaborators });
-                const batch = writeBatch(db);
-                (await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT)))).forEach(d => batch.update(d.ref, { calls: 0, rdvs: 0, powersUsed: 0 }));
-                await batch.commit();
+                // --- AUTO RESET FUNCTION CALLED MANUALLY HERE ---
+                await performDailyReset();
                 setShowResetConfirm(false);
             }} className="px-4 py-2 rounded-xl bg-red-600 text-white font-bold text-xs animate-pulse">CONFIRMER CLÔTURE</button>)}
             <button onClick={() => setIsMusicMuted(!isMusicMuted)} className={`p-3 rounded-xl border ${isMusicMuted ? 'text-slate-500' : 'text-blue-400'}`}><Music size={20}/></button>
@@ -1178,25 +1348,44 @@ export default function StrangerPhoningUltimate() {
 
       {viewMode === 'player' && (
         <div className="min-h-screen flex flex-col p-4 pb-24 relative">
-          <div className="absolute top-4 right-4 z-50 flex gap-2">
-              <button onClick={() => setShowLeaderboard(true)} className="p-3 rounded-full border bg-slate-900 border-yellow-600 text-yellow-500 hover:bg-yellow-900/50"><Trophy size={28} /></button>
-              <button onClick={() => {localStorage.removeItem('stranger_player_id'); setMyPlayerId(null); setViewMode('setup');}} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400 hover:text-red-500"><LogOut size={28} /></button>
-          </div>
-          <h1 className="text-3xl font-black text-red-600 mb-8 text-center w-full" style={{fontFamily: 'serif'}}>STRANGER PHONING</h1>
           
-          {/* FLEX CONTAINER - VERTICAL STACK: CARTE EN HAUT, CARNET EN BAS */}
-          <div className="flex-1 flex flex-col items-center gap-6 w-full max-w-md mx-auto">
-            
-            {/* 1. CARTE JOUEUR (HAUT) */}
-            <div className="w-full">
-                <PlayerCard player={myPlayer} rank={collaborators.findIndex(c => c.id === myPlayerId) + 1} isLeader={myPlayerId === collaborators[0]?.id} onUpdate={updateStats} onUsePower={usePower} bigMode={true} flashId={flashId} showControls={true} />
-            </div>
+          {/* --- HEADER BAR JOUEUR (MODIFIÉ) --- */}
+          <div className="w-full max-w-6xl mx-auto flex items-start justify-between mb-8 relative z-40 pt-4">
+              
+              {/* GAUCHE: CHAT (Talkie-Walkie REVENU A SA PLACE) */}
+              <div className="flex-shrink-0 relative z-50">
+                 <ChatSystem myName={myPlayer?.name} myId={myPlayerId} />
+              </div>
 
-            {/* 2. CARNET DE NOTES (BAS) */}
+              {/* CENTRE: TITRE & CARTE JOUEUR */}
+              <div className="flex-1 flex flex-col items-center mx-4">
+                  <h1 className="text-3xl font-black text-red-600 mb-4 text-center" style={{fontFamily: 'serif'}}>STRANGER PHONING</h1>
+                  <div className="w-full max-w-md">
+                     <PlayerCard player={myPlayer} rank={collaborators.findIndex(c => c.id === myPlayerId) + 1} isLeader={myPlayerId === collaborators[0]?.id} onUpdate={updateStats} onUsePower={usePower} bigMode={true} flashId={flashId} showControls={true} />
+                  </div>
+              </div>
+
+              {/* DROITE: ACTIONS (Trophée + Déco) */}
+              <div className="flex gap-2 items-start relative z-50">
+                 <button onClick={() => setShowLeaderboard(true)} className="p-3 rounded-full border bg-slate-900 border-yellow-600 text-yellow-500 hover:bg-yellow-900/50 transition-all hover:scale-110"><Trophy size={28} /></button>
+                 <button onClick={() => {localStorage.removeItem('stranger_player_id'); setMyPlayerId(null); setViewMode('setup');}} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400 hover:text-red-500 transition-all hover:scale-110"><LogOut size={28} /></button>
+              </div>
+          </div>
+          
+          {/* --- WORKSPACE (COMPUTER + NOTEPAD) --- */}
+          <div className="flex-1 flex flex-col lg:flex-row justify-center items-start gap-8 w-full max-w-6xl mx-auto">
+            
+            {/* GAUCHE: ORDINATEUR (RECHERCHE) */}
+            <RetroComputer 
+                computerThemeIndex={myPlayer?.computerThemeIndex || 0} 
+                onUpdateTheme={cycleComputerTheme}
+                canCustomize={getLevelInfo(myPlayer?.lifetimeRdvs).lvl >= 4}
+            />
+
+            {/* DROITE: CARNET DE NOTES */}
             <RetroNotepad myId={myPlayerId} initialData={myPlayer?.notes} myName={myPlayer?.name} currentLevel={getLevelInfo(myPlayer?.lifetimeRdvs)} noteThemeIndex={myPlayer?.noteThemeIndex || 0} />
 
           </div>
-          <ChatSystem myName={myPlayer?.name} myId={myPlayerId} />
         </div>
       )}
     </div>
