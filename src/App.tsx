@@ -57,10 +57,10 @@ const getLevelInfo = (lifetimeRdvs) => {
 const INACTIVITY_LIMIT = 15 * 24 * 60 * 60 * 1000; 
 
 // --- ASSETS ---
-const SPLASH_IMAGE_URL = "https://github.com/Amchecoeur/vitejs-vite-kxwux9m2405/tree/c5f547049a2c615d28e706a92ac3e831ab4732f1/public/assets/images";
+const SPLASH_IMAGE_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/894af133a7e4f119cf27e8040bcaabf58d754196/public/assets/images/fond.JPG";
 const INTRO_VIDEO_URL = "https://github.com/Amchecoeur/vitejs-vite-kxwux9m2405/blob/188bc2492b439ac3f82362919332752c395d68ac/public/assets/images/fond.JPG";
 const BACKGROUND_MUSIC_URL = "https://cdn.discordapp.com/attachments/1441718389356888116/1442069978101583872/strangersthings.mp3?ex=69256953&is=692417d3&hm=3865516ba4d17dd398345bd6cdaa34fba44509c47367944f169ac93e106c2452&";
-const BACKGROUND_MAIN_URL = "https://github.com/Amchecoeur/vitejs-vite-kxwux9m2405/tree/c5f547049a2c615d28e706a92ac3e831ab4732f1/public/assets/images";
+const BACKGROUND_MAIN_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/894af133a7e4f119cf27e8040bcaabf58d754196/public/assets/images/fond.JPG";
 
 // --- THEMES & COLORS ---
 const THEMES = [
