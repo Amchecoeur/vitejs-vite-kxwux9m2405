@@ -61,9 +61,10 @@ const INACTIVITY_LIMIT = 15 * 24 * 60 * 60 * 1000;
 // --- ASSETS CLASSIQUES (ORIGINAUX) ---
 const SPLASH_IMAGE_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/main/public/assets/images/fond.JPG";
 const BACKGROUND_MAIN_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/main/public/assets/images/fond.JPG";
-// Liens originaux Discord/CDN pour la version classique
-const INTRO_VIDEO_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/3693163d0ac91109846852ad4aaadb4ff4d620d1/public/assets/video/intro.mp4"; 
-const BACKGROUND_MUSIC_URL = "https://raw.githubusercontent.com/Amchecoeur/vitejs-vite-kxwux9m2405/0f0de90b192a639663ac641aa4ac1a93c4c14753/public/assets/sounds/strangersthings.mp3";
+
+// LIENS MIS À JOUR (Utilisation de jsDelivr pour corriger les problèmes de lecture)
+const INTRO_VIDEO_URL = "https://cdn.jsdelivr.net/gh/Amchecoeur/vitejs-vite-kxwux9m2405@3693163d0ac91109846852ad4aaadb4ff4d620d1/public/assets/video/intro.mp4"; 
+const BACKGROUND_MUSIC_URL = "https://cdn.jsdelivr.net/gh/Amchecoeur/vitejs-vite-kxwux9m2405@0f0de90b192a639663ac641aa4ac1a93c4c14753/public/assets/sounds/strangersthings.mp3";
 
 // --- THEMES & COLORS ---
 const THEMES = [
@@ -546,7 +547,7 @@ const ChatSystem = ({ myName, myId }) => {
 
         {/* FENÊTRE DE CHAT (S'OUVRE À DROITE DU TALKIE) */}
         {isOpen && (
-            <div className="absolute top-0 left-24 z-40 w-80 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-r-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left-10 origin-top-left">
+            <div className="absolute top-0 left-24 z-40 w-80 h-96 bg-slate-950/95 border-2 border-slate-600 rounded-r-xl rounded-bl-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left-10 origin-top-left ml-4">
                 <div className="bg-slate-900 p-3 border-b border-slate-700 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                         <WalkieTalkieIcon className="w-5 h-5 text-slate-400"/>
@@ -1240,35 +1241,6 @@ export default function StrangerPhoningUltimate() {
           </div>
       )}
 
-      {/* LEADERBOARD MODAL */}
-      {showLeaderboard && (
-          <div className="fixed inset-0 z-[90] bg-black/95 flex flex-col items-center justify-center p-4">
-              <div className="bg-slate-900 w-full max-w-md max-h-[80vh] rounded-2xl border-2 border-yellow-600 flex flex-col overflow-hidden shadow-[0_0_50px_rgba(202,138,4,0.3)]">
-                  <div className="p-4 border-b border-yellow-600/30 flex justify-between items-center bg-slate-900">
-                      <h3 className="text-xl font-black text-yellow-500 flex items-center gap-2 uppercase tracking-wider"><Trophy /> CLASSEMENT</h3>
-                      <button onClick={() => setShowLeaderboard(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><Minimize2 size={20}/></button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-2">
-                      {collaborators.map((c, i) => (
-                          <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg mb-2 ${c.id === myPlayerId ? 'bg-yellow-900/20 border border-yellow-700/50' : 'bg-slate-800/50 border border-slate-700/50'}`}>
-                              <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center font-black text-lg rounded ${i===0 ? 'bg-yellow-500 text-black' : (i===1 ? 'bg-slate-400 text-black' : (i===2 ? 'bg-orange-700 text-white' : 'bg-slate-800 text-slate-500'))}`}>
-                                  {i+1}
-                              </div>
-                              <img src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(c.avatarSeed || c.name)}&backgroundColor=transparent`} className="w-8 h-8 rounded border border-slate-600 bg-slate-700" />
-                              <div className="flex-1 min-w-0">
-                                  <div className={`font-bold truncate ${c.id === myPlayerId ? 'text-yellow-400' : 'text-slate-200'}`}>{c.name}</div>
-                                  <div className="text-[10px] text-slate-500 uppercase">{getLevelInfo(c.lifetimeRdvs).name}</div>
-                              </div>
-                              <div className="text-right">
-                                  <div className="font-mono font-bold text-white">{c.rdvs} <span className="text-[10px] text-slate-500">RDV</span></div>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          </div>
-      )}
-
       {/* --- VIEWS --- */}
       {viewMode === 'splash' && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden">
@@ -1351,7 +1323,7 @@ export default function StrangerPhoningUltimate() {
           {/* --- HEADER BAR JOUEUR (MODIFIÉ) --- */}
           <div className="w-full max-w-6xl mx-auto flex items-start justify-between mb-8 relative z-40 pt-4">
               
-              {/* GAUCHE: CHAT (Talkie-Walkie REVENU A SA PLACE) */}
+              {/* GAUCHE: CHAT (Talkie-Walkie) */}
               <div className="flex-shrink-0 relative z-50 mr-4">
                  <ChatSystem myName={myPlayer?.name} myId={myPlayerId} />
               </div>
