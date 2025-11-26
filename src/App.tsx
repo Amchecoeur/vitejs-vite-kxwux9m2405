@@ -44,7 +44,7 @@ const CONFIGS = {
       video: "https://cdn.jsdelivr.net/gh/Amchecoeur/vitejs-vite-kxwux9m2405@3693163d0ac91109846852ad4aaadb4ff4d620d1/public/assets/video/intro.mp4",
       music: "https://cdn.jsdelivr.net/gh/Amchecoeur/vitejs-vite-kxwux9m2405@0f0de90b192a639663ac641aa4ac1a93c4c14753/public/assets/sounds/strangersthings.mp3"
     },
-    hasVideoIntro: true,
+    hasVideoIntro: false,
     primaryColor: 'text-red-600',
     borderColor: 'border-red-600',
     hoverBg: 'hover:bg-red-900/50'
