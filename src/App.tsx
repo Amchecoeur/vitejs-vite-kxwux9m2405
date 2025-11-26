@@ -44,7 +44,7 @@ const CONFIGS = {
       video: "https://cdn.jsdelivr.net/gh/Amchecoeur/vitejs-vite-kxwux9m2405@3693163d0ac91109846852ad4aaadb4ff4d620d1/public/assets/video/intro.mp4",
       music: "https://cdn.jsdelivr.net/gh/Amchecoeur/vitejs-vite-kxwux9m2405@0f0de90b192a639663ac641aa4ac1a93c4c14753/public/assets/sounds/strangersthings.mp3"
     },
-    hasVideoIntro: false,
+    hasVideoIntro: true,
     primaryColor: 'text-red-600',
     borderColor: 'border-red-600',
     hoverBg: 'hover:bg-red-900/50'
@@ -1147,7 +1147,7 @@ const StrangerPhoningGame = ({ config, onBack }) => {
         chatSnap.forEach(d => batch.delete(d.ref));
         
         await batch.commit();
-        setResetConfirm(false);
+        setShowResetConfirm(false);
       } catch (e) {
           console.error("Archive error", e);
       }
@@ -1211,11 +1211,18 @@ const StrangerPhoningGame = ({ config, onBack }) => {
             <h1 className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase drop-shadow-[0_0_15px_rgba(220,38,38,1)] mb-8 animate-pulse text-center" style={{ fontFamily: 'serif' }}>{config.title}</h1>
             <div className="bg-black/50 p-4 rounded-xl border border-red-900/30"><p className="text-red-500 font-bold tracking-[0.3em] animate-bounce uppercase">Cliquer pour entrer</p></div>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); setViewMode('admin_intro'); }} className="absolute bottom-6 right-6 z-30 text-slate-400 hover:text-white bg-black/50 p-2 rounded-lg text-xs uppercase"><Monitor size={14} /> Mode Admin</button>
+
+          {/* CORRECTION 1 : Navigation directe vers 'admin' */}
+          <button 
+            onClick={(e) => { e.stopPropagation(); setViewMode('admin'); }} 
+            className="absolute bottom-6 right-6 z-30 text-slate-400 hover:text-white bg-black/50 p-2 rounded-lg text-xs uppercase flex items-center gap-2 border border-slate-800 hover:border-red-500 transition-colors"
+            >
+            <Monitor size={14} /> Mode Admin
+          </button>
         </div>
       )}
 
-      {/* VIEW: ADMIN INTRO (VIDEO OR DIRECT) */}
+      {/* VIEW: ADMIN INTRO (VIDEO OR DIRECT) - NE SERA PLUS UTILISÉ MAIS GARDÉ POUR RÉFÉRENCE */}
       {viewMode === 'admin_intro' && (
         <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center">
             {config.hasVideoIntro ? (
@@ -1231,28 +1238,40 @@ const StrangerPhoningGame = ({ config, onBack }) => {
 
       {/* VIEW: ADMIN */}
       {viewMode === 'admin' && (
-        <div className="min-h-screen p-6 animate-in fade-in duration-1000">
-             <div className="flex justify-between items-center mb-8 bg-black/30 backdrop-blur-sm p-4 rounded-xl border-b border-red-900/30">
-                 <div><h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase" style={{ fontFamily: 'serif' }}>{config.title}</h1><p className="text-slate-400 tracking-[0.5em] uppercase text-sm">Admin Console</p></div>
+        // CORRECTION 2 : Ajout de Z-Index et d'un fond opaque
+        <div className="min-h-screen p-6 animate-in fade-in duration-500 relative z-50 bg-slate-900/95 overflow-y-auto font-mono">
+             <div className="flex justify-between items-center mb-8 bg-black/50 backdrop-blur-md p-4 rounded-xl border-b border-red-900/50 shadow-lg">
+                 <div>
+                    <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase" style={{ fontFamily: 'serif' }}>{config.title}</h1>
+                    <p className="text-slate-400 tracking-[0.5em] uppercase text-sm font-bold">Admin Console</p>
+                 </div>
                  <div className="flex gap-8 text-center">
                     <div><div className="text-xs text-slate-400 uppercase">Appels</div><div className="text-3xl font-mono text-blue-400 font-bold">{collaborators.reduce((a,c)=>a+(c.calls||0),0)}</div></div>
                     <div><div className="text-xs text-slate-400 uppercase">RDV</div><div className="text-4xl font-mono text-red-500 font-bold">{collaborators.reduce((a,c)=>a+(c.rdvs||0),0)}</div></div>
                  </div>
              </div>
              <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-24`}>
+                 {/* CORRECTION 3 : État "Vide" si aucun joueur */}
+                 {collaborators.length === 0 && (
+                    <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-500 opacity-50">
+                        <Ghost size={48} className="mb-4 animate-pulse"/>
+                        <p className="text-xl uppercase font-bold">Aucun agent détecté</p>
+                        <p className="text-sm font-mono">En attente de connexion...</p>
+                    </div>
+                 )}
                  {collaborators.map((c, i) => (<PlayerCard key={c.id} player={c} rank={i+1} isLeader={c.id === collaborators[0]?.id} onUpdate={updateStats} onRequestDelete={setPlayerToDelete} isAdmin={true} showControls={false} flashId={flashId} appId={config.appId} />))}
              </div>
              {/* Admin Toolbar */}
-             <div className="fixed bottom-6 right-6 flex gap-3 z-50 bg-slate-950/90 p-3 rounded-2xl border border-slate-800">
-                 <button onClick={() => setIsUpsideDown(!isUpsideDown)} className="p-3 rounded-xl border bg-slate-900 border-slate-700"><Ghost/></button>
-                 <button onClick={handleShowArchives} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white"><History size={20}/></button>
-                 {resetConfirm ? (
+             <div className="fixed bottom-6 right-6 flex gap-3 z-[60] bg-slate-950 p-3 rounded-2xl border border-slate-700 shadow-2xl animate-in slide-in-from-bottom-4">
+                 <button onClick={() => setIsUpsideDown(!isUpsideDown)} className="p-3 rounded-xl border bg-slate-900 border-slate-700 text-slate-400 hover:text-white transition-colors"><Ghost size={20}/></button>
+                 <button onClick={handleShowArchives} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition-colors"><History size={20}/></button>
+                 {showResetConfirm ? (
                      <button onClick={handleDailyReset} className="px-4 py-3 rounded-xl bg-red-600 text-white font-bold text-xs animate-pulse border border-red-400 shadow-lg">CONFIRMER CLÔTURE</button>
                  ) : (
-                     <button onClick={() => setResetConfirm(true)} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-red-500 hover:text-white"><CalendarCheck/></button>
+                     <button onClick={() => setShowResetConfirm(true)} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-red-500 hover:text-white transition-colors"><CalendarCheck size={20}/></button>
                  )}
-                 <button onClick={() => setViewMode('splash')} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400"><LogOut/></button>
-                 <button onClick={() => setIsMusicMuted(!isMusicMuted)} className={`p-3 rounded-xl border ${isMusicMuted ? 'text-slate-500' : 'text-blue-400'}`}><Music/></button>
+                 <button onClick={() => setViewMode('splash')} className="p-3 rounded-xl bg-red-900/20 border border-red-900 text-red-500 hover:text-white transition-colors" title="Quitter"><LogOut size={20}/></button>
+                 <button onClick={() => setIsMusicMuted(!isMusicMuted)} className={`p-3 rounded-xl border transition-colors ${isMusicMuted ? 'text-slate-500 border-slate-700' : 'text-blue-400 border-blue-900 bg-blue-900/20'}`}><Music size={20}/></button>
              </div>
         </div>
       )}
