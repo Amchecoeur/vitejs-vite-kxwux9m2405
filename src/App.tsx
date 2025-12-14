@@ -75,7 +75,7 @@ const COLL_CHAT = 'strangers-phoning-chat-global';
 const COLL_EVENTS = 'strangers-phoning-global-events';
 
 // Hash du code super admin (code caché)
-const SUPER_ADMIN_HASH = "8f14e45f"; // Hash du code réel
+const SUPER_ADMIN_HASH = "1a3bfc3e"; // Hash du code réel
 const hashCode = (str) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
