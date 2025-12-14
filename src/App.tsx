@@ -18,12 +18,12 @@ import {
 
 // --- FIREBASE ---
 const firebaseConfig = {
-  apiKey: "AIzaSyC9zC-MEA3bpP8gUHW3RdDixHf4o_DkB2k",
-  authDomain: "strangersphoning.firebaseapp.com",
-  projectId: "strangersphoning",
-  storageBucket: "strangersphoning.firebasestorage.app",
-  messagingSenderId: "28192352824",
-  appId: "1:28192352824:web:09d9d5eae72c0853f954cd"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -902,7 +902,7 @@ const SuperAdminDashboard = ({ onClose }) => {
   );
 };
 
-const StrangerPhoningGame = ({ config, onBack }) => {
+const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   const [user, setUser] = useState(null);
   const [collaborators, setCollaborators] = useState([]);
   const [historyList, setHistoryList] = useState([]);
@@ -932,6 +932,16 @@ const StrangerPhoningGame = ({ config, onBack }) => {
   const [showArchives, setShowArchives] = useState(false);
   const [selectedArchive, setSelectedArchive] = useState(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+
+  // États pour le Super Admin dans ce composant
+  const [showSuperAdminLogin, setShowSuperAdminLogin] = useState(false);
+  const [superAdminCode, setSuperAdminCode] = useState('');
+
+  // États pour la gestion des utilisateurs
+  const [showUserManagement, setShowUserManagement] = useState(false);
+  const [selectedUserForReset, setSelectedUserForReset] = useState(null);
+  const [newGeneratedPin, setNewGeneratedPin] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   const isMutedRef = useRef(isMuted);
   const prevStatsRef = useRef({});
@@ -1183,6 +1193,46 @@ const StrangerPhoningGame = ({ config, onBack }) => {
     await updateDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, myPlayerId), { computerThemeIndex: nextTheme });
   };
 
+  const handleSuperAdminLogin = (e) => {
+    e.preventDefault();
+    if (verifySuperAdmin(superAdminCode)) {
+      setViewMode('admin');
+      setShowSuperAdminLogin(false);
+      setSuperAdminCode('');
+    } else {
+      alert("Accès refusé.");
+      setSuperAdminCode('');
+    }
+  };
+
+  const handleResetUserPin = (userId, userName) => {
+    // Générer un nouveau PIN aléatoire à 6 chiffres
+    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+    setSelectedUserForReset({ id: userId, name: userName });
+    setNewGeneratedPin(newPin);
+    setResetSuccess(false);
+  };
+
+  const confirmPinReset = async () => {
+    try {
+      await updateDoc(
+        doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, selectedUserForReset.id),
+        { pin: newGeneratedPin }
+      );
+      playSound('coin', isMuted);
+      setResetSuccess(true);
+      // Garder la modale ouverte 3 secondes pour afficher le succès, puis fermer
+      setTimeout(() => {
+        setSelectedUserForReset(null);
+        setNewGeneratedPin('');
+        setResetSuccess(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Erreur lors de la réinitialisation du PIN:', error);
+      alert('Erreur lors de la réinitialisation du PIN.');
+    }
+  };
+
   const myPlayer = collaborators.find(c => c.id === myPlayerId);
   const upsideClass = isUpsideDown ? 'rotate-180 saturate-[0.2] brightness-[0.6] contrast-125 bg-black' : '';
   const shakeClass = isShaking ? 'animate-shake' : '';
@@ -1214,6 +1264,29 @@ const StrangerPhoningGame = ({ config, onBack }) => {
         </div>
       )}
 
+      {/* Super Admin Login Modal */}
+      {showSuperAdminLogin && (
+        <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-red-950 border border-red-600 p-6 rounded-xl w-full max-w-sm text-center">
+            <h3 className="text-red-500 font-black mb-4 uppercase tracking-widest">Sécurité Maximale</h3>
+            <form onSubmit={handleSuperAdminLogin}>
+              <input
+                type="password"
+                autoFocus
+                className="w-full bg-black border border-red-800 text-white text-center p-2 rounded mb-4"
+                placeholder="Code Maître"
+                value={superAdminCode}
+                onChange={(e) => setSuperAdminCode(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setShowSuperAdminLogin(false); setSuperAdminCode(''); }} className="flex-1 bg-slate-800 py-2 rounded text-xs">Annuler</button>
+                <button type="submit" className="flex-1 bg-red-600 py-2 rounded text-xs font-bold">Accéder</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* VIEW: SPLASH */}
       {viewMode === 'splash' && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none">
@@ -1225,10 +1298,9 @@ const StrangerPhoningGame = ({ config, onBack }) => {
             <h1 className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-600 to-purple-600 uppercase drop-shadow-[0_0_15px_rgba(220,38,38,1)] mb-8 animate-pulse text-center" style={{ fontFamily: 'serif' }}>{config.title}</h1>
             <div className="bg-black/50 p-4 rounded-xl border border-red-900/30"><p className="text-red-500 font-bold tracking-[0.3em] animate-bounce uppercase">Cliquer pour entrer</p></div>
           </div>
-
-          {/* CORRECTION 1 : Navigation directe vers 'admin' */}
+          {/* Bouton Mode Admin protégé par code super admin */}
           <button
-            onClick={(e) => { e.stopPropagation(); setViewMode('admin'); }}
+            onClick={(e) => { e.stopPropagation(); setShowSuperAdminLogin(true); }}
             className="absolute bottom-6 right-6 z-30 text-slate-400 hover:text-white bg-black/50 p-2 rounded-lg text-xs uppercase flex items-center gap-2 border border-slate-800 hover:border-red-500 transition-colors"
           >
             <Monitor size={14} /> Mode Admin
@@ -1277,6 +1349,7 @@ const StrangerPhoningGame = ({ config, onBack }) => {
           </div>
           {/* Admin Toolbar */}
           <div className="fixed bottom-6 right-6 flex gap-3 z-[60] bg-slate-950 p-3 rounded-2xl border border-slate-700 shadow-2xl animate-in slide-in-from-bottom-4">
+            <button onClick={() => setShowUserManagement(true)} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-blue-400 hover:text-white transition-colors" title="Gestion Utilisateurs"><Users size={20} /></button>
             <button onClick={() => setIsUpsideDown(!isUpsideDown)} className="p-3 rounded-xl border bg-slate-900 border-slate-700 text-slate-400 hover:text-white transition-colors"><Ghost size={20} /></button>
             <button onClick={handleShowArchives} className="p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition-colors"><History size={20} /></button>
             {showResetConfirm ? (
@@ -1371,6 +1444,126 @@ const StrangerPhoningGame = ({ config, onBack }) => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* USER MANAGEMENT MODAL */}
+      {showUserManagement && (
+        <div className="fixed inset-0 z-[350] bg-black/95 flex items-center justify-center p-4">
+          <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl border-2 border-blue-600 flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-blue-600/30 flex justify-between items-center bg-slate-800">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Users className="text-blue-400" /> GESTION DES UTILISATEURS
+              </h2>
+              <button onClick={() => setShowUserManagement(false)} className="p-2 hover:bg-slate-700 rounded-full text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {collaborators.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <Ghost size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">Aucun utilisateur inscrit</p>
+                </div>
+              ) : (
+                collaborators.map((user, idx) => (
+                  <div key={user.id} className="bg-slate-800/80 p-4 rounded-lg flex items-center justify-between hover:bg-slate-800 transition-colors border border-slate-700/50">
+                    <div className="flex items-center gap-4 flex-1">
+                      <img
+                        src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(user.avatarSeed || user.name)}&backgroundColor=transparent`}
+                        className="w-12 h-12 rounded border border-slate-600 bg-slate-700"
+                        alt={user.name}
+                      />
+                      <div className="flex-1">
+                        <div className="font-bold text-white text-lg">{user.name}</div>
+                        <div className="text-xs text-slate-400 flex items-center gap-3">
+                          <span>Dernière activité: {user.lastActive ? new Date(user.lastActive).toLocaleString('fr-FR') : 'Jamais'}</span>
+                          <span>•</span>
+                          <span className="text-blue-400">{getLevelInfo(user.lifetimeRdvs).name}</span>
+                        </div>
+                      </div>
+                      <div className="text-right mr-4">
+                        <div className="text-sm text-slate-400">Stats</div>
+                        <div className="flex gap-3">
+                          <span className="text-blue-400 font-mono font-bold">{user.calls || 0} appels</span>
+                          <span className="text-red-400 font-mono font-bold">{user.rdvs || 0} RDV</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleResetUserPin(user.id, user.name)}
+                      className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 shadow-lg"
+                    >
+                      <KeyRound size={16} />
+                      Réinitialiser PIN
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PIN RESET CONFIRMATION MODAL */}
+      {selectedUserForReset && (
+        <div className="fixed inset-0 z-[400] bg-black/95 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-orange-600 p-8 rounded-2xl max-w-md w-full shadow-[0_0_100px_rgba(234,88,12,0.5)]">
+            {resetSuccess ? (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-black text-green-400 mb-2">PIN RÉINITIALISÉ !</h3>
+                <p className="text-slate-400">Le nouveau code a été enregistré.</p>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-2xl font-black text-white mb-4 flex items-center gap-2">
+                  <KeyRound className="text-orange-500" />
+                  RÉINITIALISER LE PIN
+                </h3>
+                <p className="text-white mb-2">
+                  Utilisateur: <span className="font-bold text-orange-400">{selectedUserForReset.name}</span>
+                </p>
+
+                <div className="bg-black border border-orange-600 p-6 rounded-xl mb-4 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-900/20 to-red-900/20 animate-pulse"></div>
+                  <div className="relative z-10">
+                    <div className="text-xs text-slate-400 mb-2 uppercase font-bold text-center">Nouveau Code PIN</div>
+                    <div className="text-4xl font-mono text-orange-400 tracking-[0.5em] text-center font-black select-all cursor-pointer">
+                      {newGeneratedPin}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-orange-900/20 border border-orange-800 p-3 rounded-lg mb-6">
+                  <p className="text-orange-400 text-sm flex items-start gap-2">
+                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                    <span>Veuillez noter ce code et le communiquer à l'utilisateur. Il ne sera plus affiché après confirmation.</span>
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setSelectedUserForReset(null); setNewGeneratedPin(''); }}
+                    className="flex-1 bg-slate-700 hover:bg-slate-600 p-3 rounded-lg transition-colors font-bold"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={confirmPinReset}
+                    className="flex-1 bg-orange-600 hover:bg-orange-500 p-3 rounded-lg font-bold transition-colors shadow-lg"
+                  >
+                    Confirmer
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1511,7 +1704,7 @@ export default function App() {
 
   // Si une app est sélectionnée
   if (activeApp) {
-    return <StrangerPhoningGame config={CONFIGS[activeApp]} onBack={() => setActiveApp(null)} />;
+    return <StrangerPhoningGame config={CONFIGS[activeApp]} onBack={() => setActiveApp(null)} onRequestSuperAdmin={() => setShowSuperAdminLogin(true)} />;
   }
 
   // Sinon, on affiche le HUB
