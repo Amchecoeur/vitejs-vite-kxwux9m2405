@@ -18,12 +18,12 @@ import {
 
 // --- FIREBASE ---
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: "AIzaSyC9zC-MEA3bpP8gUHW3RdDixHf4o_DkB2k",
+  authDomain: "strangersphoning.firebaseapp.com",
+  projectId: "strangersphoning",
+  storageBucket: "strangersphoning.firebasestorage.app",
+  messagingSenderId: "28192352824",
+  appId: "1:28192352824:web:09d9d5eae72c0853f954cd"
 };
 
 const app = initializeApp(firebaseConfig);
