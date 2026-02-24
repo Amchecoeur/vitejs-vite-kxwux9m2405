@@ -6,9 +6,9 @@ import {
   Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText, CalendarCheck, ChevronLeft, Book, Maximize2, X, Radio, Globe, Clock, Activity
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
-  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc,
   onSnapshot, writeBatch, query, getDocs, orderBy, limit, where
 } from 'firebase/firestore';
 
@@ -30,10 +30,25 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- COMPTE DE SERVICE FIREBASE (email/password) ---
-// Créer ce compte dans Firebase Console → Authentication → Add user
-const SERVICE_EMAIL = "service@strangersphoning.com";   // ← à remplacer
-const SERVICE_PASSWORD = "VOTRE_MOT_DE_PASSE_ICI";       // ← à remplacer
+// --- ADMINS — emails autorisés à accéder aux vues admin directement ---
+// Ajoutez ici votre email (ou plusieurs séparés par des virgules)
+const ADMIN_EMAILS = [
+  "anthony.campolo@adn-entreprise.fr",
+];
+
+// --- HELPER ERREURS FIREBASE AUTH ---
+const getFirebaseAuthError = (code) => {
+  switch (code) {
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential': return 'Email ou mot de passe incorrect';
+    case 'auth/email-already-in-use': return 'Cet email est déjà utilisé';
+    case 'auth/invalid-email': return 'Adresse email invalide';
+    case 'auth/weak-password': return 'Mot de passe trop faible (6 caractères min)';
+    case 'auth/too-many-requests': return 'Trop de tentatives, réessayez dans quelques minutes';
+    default: return 'Erreur de connexion';
+  }
+};
 
 // --- CONFIGURATIONS DES ÉQUIPES ---
 const CONFIGS = {
@@ -1085,13 +1100,15 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   const [collaborators, setCollaborators] = useState([]);
   const [historyList, setHistoryList] = useState([]);
   const [viewMode, setViewMode] = useState('splash');
-  const [myPlayerId, setMyPlayerId] = useState(localStorage.getItem(`stranger_player_id_${config.id}`));
+  const [myPlayerId, setMyPlayerId] = useState(null);
 
-  const [loginStep, setLoginStep] = useState('NAME');
-  const [joinName, setJoinName] = useState('');
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [inactivityAlert, setInactivityAlert] = useState(false);
+  // Auth email/password
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [displayName, setDisplayName] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isMusicMuted, setIsMusicMuted] = useState(false);
@@ -1115,11 +1132,8 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   const [showSuperAdminLogin, setShowSuperAdminLogin] = useState(false);
   const [superAdminCode, setSuperAdminCode] = useState('');
 
-  // États pour la gestion des utilisateurs
+  // Gestion des utilisateurs (admin)
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const [selectedUserForReset, setSelectedUserForReset] = useState(null);
-  const [newGeneratedPin, setNewGeneratedPin] = useState('');
-  const [resetSuccess, setResetSuccess] = useState(false);
 
   const isMutedRef = useRef(isMuted);
   const prevStatsRef = useRef({});
@@ -1141,12 +1155,30 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
     }
   }, [viewMode, isMusicMuted]);
 
-  // --- AUTHENTIFICATION (email/password de service) ---
+  // --- AUTHENTIFICATION FIREBASE ---
+  // Session persistée : reconnexion automatique au chargement
   useEffect(() => {
-    signInWithEmailAndPassword(auth, SERVICE_EMAIL, SERVICE_PASSWORD)
-      .catch(e => console.error("Auth Firebase échouée :", e.message));
-    onAuthStateChanged(auth, u => setUser(u));
-  }, []);
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        const isAdmin = ADMIN_EMAILS.includes(firebaseUser.email);
+        if (isAdmin) {
+          // Email admin → accès direct à la vue admin sans profil joueur requis
+          setMyPlayerId(firebaseUser.uid);
+          setViewMode(prev => prev === 'splash' || prev === 'setup' ? 'admin' : prev);
+        } else {
+          const snap = await getDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, firebaseUser.uid));
+          if (snap.exists()) {
+            setMyPlayerId(firebaseUser.uid);
+            setViewMode(prev => prev === 'splash' || prev === 'setup' ? 'player' : prev);
+          }
+        }
+      } else {
+        setMyPlayerId(null);
+      }
+    });
+    return () => unsub();
+  }, [config.appId]);
 
   // --- CHARGEMENT DES DONNÉES (EN TEMPS RÉEL) ---
   useEffect(() => {
@@ -1252,58 +1284,67 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
 
   // --- ACTIONS UTILISATEUR ---
 
-  const handleJoin = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Logique simplifiée pour l'exemple (Login en 2 étapes dans le code original)
-    // ... (Reprendre la logique complète si nécessaire)
-  };
-
-  const handleJoinStep1 = (e) => {
-    e.preventDefault();
-    const name = joinName.trim();
-    if (!name) return;
-    playSound('click', isMuted);
-    const existing = collaborators.find(c => c.name.toLowerCase() === name.toLowerCase());
-    if (existing) setLoginStep('AUTH_PIN'); else setLoginStep('CREATE_PIN');
-  };
-
-  const handleJoinStep2 = async (e) => {
-    e.preventDefault();
-    if (pinInput.length !== 6) { setPinError("Le code doit faire 6 chiffres"); playSound('error', isMuted); return; }
-    playSound('click', isMuted);
-    const name = joinName.trim();
-    const now = Date.now();
-
-    if (loginStep === 'CREATE_PIN') {
-      const d = await addDoc(collection(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT), {
-        name, calls: 0, rdvs: 0, lifetimeRdvs: 0, powersUsed: 0, pin: pinInput, notes: { J1: '', J2: '', J3: '' }, createdAt: now, lastActive: now
-      });
-      setMyPlayerId(d.id);
-      localStorage.setItem(`stranger_player_id_${config.id}`, d.id);
-      setViewMode('player');
-      setLoginStep('NAME');
-      setPinInput('');
-    }
-    else if (loginStep === 'AUTH_PIN') {
-      const existing = collaborators.find(c => c.name.toLowerCase() === name.toLowerCase());
-      if (existing && existing.pin === pinInput) {
-        if (existing.lastActive && (now - existing.lastActive > INACTIVITY_LIMIT)) {
-          await updateDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, existing.id), { lifetimeRdvs: 0, lastActive: now });
-          setInactivityAlert(true);
-        } else {
-          await updateDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, existing.id), { lastActive: now });
-        }
-        setMyPlayerId(existing.id);
-        localStorage.setItem(`stranger_player_id_${config.id}`, existing.id);
-        setViewMode('player');
-        setLoginStep('NAME');
-        setPinInput('');
-      } else {
-        setPinError("Code Incorrect !");
-        playSound('error', isMuted);
-        setPinInput('');
+    if (!emailInput.trim() || !passwordInput) return;
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const cred = await signInWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+      const uid = cred.user.uid;
+      const isAdmin = ADMIN_EMAILS.includes(cred.user.email);
+      if (isAdmin) {
+        setMyPlayerId(uid);
+        playSound('unlock', isMuted);
+        setViewMode('admin');
+        setAuthLoading(false);
+        return;
       }
+      const playerRef = doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, uid);
+      const snap = await getDoc(playerRef);
+      if (snap.exists()) {
+        await updateDoc(playerRef, { lastActive: Date.now() });
+        setMyPlayerId(uid);
+        playSound('click', isMuted);
+        setViewMode('player');
+      } else {
+        // Compte Firebase OK mais pas de profil joueur pour cette équipe
+        setAuthMode('register');
+        setAuthError('Aucun profil trouvé — créez votre compte ci-dessous');
+      }
+    } catch (e) {
+      setAuthError(getFirebaseAuthError(e.code));
+      playSound('error', isMuted);
     }
+    setAuthLoading(false);
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!displayName.trim()) { setAuthError('Le nom est requis'); return; }
+    if (!emailInput.trim()) { setAuthError('L\'email est requis'); return; }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+      const uid = cred.user.uid;
+      const now = Date.now();
+      await setDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, uid), {
+        name: displayName.trim(),
+        email: emailInput.trim(),
+        uid,
+        calls: 0, rdvs: 0, lifetimeRdvs: 0, powersUsed: 0,
+        notes: { J1: '', J2: '', J3: '' },
+        createdAt: now, lastActive: now,
+      });
+      setMyPlayerId(uid);
+      playSound('unlock', isMuted);
+      setViewMode('player');
+    } catch (e) {
+      setAuthError(getFirebaseAuthError(e.code));
+      playSound('error', isMuted);
+    }
+    setAuthLoading(false);
   };
 
   const updateStats = async (id, field, delta) => {
@@ -1328,9 +1369,8 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   };
 
   const confirmDelete = async () => {
-    if (deleteCode !== '240113') { alert("CODE ADMIN INCORRECT !"); return; }
     await deleteDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, playerToDelete.id));
-    if (playerToDelete.id === myPlayerId) { localStorage.removeItem(`stranger_player_id_${config.id}`); setMyPlayerId(null); setViewMode('setup'); }
+    if (playerToDelete.id === myPlayerId) { await signOut(auth); setMyPlayerId(null); setViewMode('setup'); }
     setPlayerToDelete(null); setDeleteCode('');
   };
 
@@ -1381,34 +1421,6 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
     } else {
       alert("Accès refusé.");
       setSuperAdminCode('');
-    }
-  };
-
-  const handleResetUserPin = (userId, userName) => {
-    // Générer un nouveau PIN aléatoire à 6 chiffres
-    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
-    setSelectedUserForReset({ id: userId, name: userName });
-    setNewGeneratedPin(newPin);
-    setResetSuccess(false);
-  };
-
-  const confirmPinReset = async () => {
-    try {
-      await updateDoc(
-        doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, selectedUserForReset.id),
-        { pin: newGeneratedPin }
-      );
-      playSound('coin', isMuted);
-      setResetSuccess(true);
-      // Garder la modale ouverte 3 secondes pour afficher le succès, puis fermer
-      setTimeout(() => {
-        setSelectedUserForReset(null);
-        setNewGeneratedPin('');
-        setResetSuccess(false);
-      }, 3000);
-    } catch (error) {
-      console.error('Erreur lors de la réinitialisation du PIN:', error);
-      alert('Erreur lors de la réinitialisation du PIN.');
     }
   };
 
@@ -1542,27 +1554,61 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
         </div>
       )}
 
-      {/* VIEW: SETUP (LOGIN) */}
+      {/* VIEW: SETUP (LOGIN / INSCRIPTION) */}
       {viewMode === 'setup' && (
         <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-md border border-red-900/30 p-8 rounded-2xl">
-            <h1 className="text-2xl font-black text-center mb-6 text-white">ACCÈS SÉCURISÉ</h1>
-            {loginStep === 'NAME' && (
-              <form onSubmit={handleJoinStep1} className="flex flex-col gap-4">
-                <input autoFocus type="text" value={joinName} onChange={e => setJoinName(e.target.value)} className="bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl" placeholder="NOM DE CODE" />
-                <button type="submit" disabled={!joinName.trim()} className="bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl">SUIVANT</button>
-              </form>
-            )}
-            {/* Steps CREATE_PIN and AUTH_PIN omitted for brevity but logic is same as before */}
-            {(loginStep === 'CREATE_PIN' || loginStep === 'AUTH_PIN') && (
-              <form onSubmit={handleJoinStep2} className="flex flex-col gap-4">
-                <div className="text-center text-white mb-2">{loginStep === 'CREATE_PIN' ? 'CRÉER UN CODE (6 CHIFFRES)' : 'ENTREZ VOTRE CODE'}</div>
-                <input autoFocus type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} className="bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl tracking-[0.5em]" placeholder="------" />
-                {pinError && <div className="text-red-500 text-center">{pinError}</div>}
-                <button type="submit" className="bg-blue-600 text-white font-bold py-4 rounded-xl">VALIDER</button>
-              </form>
-            )}
-            <button onClick={() => setViewMode('splash')} className="w-full mt-4 text-slate-500 text-xs">Retour</button>
+          <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-md border border-red-900/30 p-8 rounded-2xl shadow-2xl">
+            <h1 className="text-2xl font-black text-center mb-1 text-white uppercase tracking-widest">ACCÈS SÉCURISÉ</h1>
+            <p className="text-center text-slate-500 text-[10px] mb-6 uppercase tracking-widest">{config.title}</p>
+
+            {/* Toggle connexion / inscription */}
+            <div className="flex mb-6 bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+              <button onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                className={`flex-1 py-2.5 text-sm font-bold transition-colors ${authMode === 'login' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                CONNEXION
+              </button>
+              <button onClick={() => { setAuthMode('register'); setAuthError(''); }}
+                className={`flex-1 py-2.5 text-sm font-bold transition-colors ${authMode === 'register' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                CRÉER UN COMPTE
+              </button>
+            </div>
+
+            <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="flex flex-col gap-3">
+              {authMode === 'register' && (
+                <input
+                  autoFocus
+                  type="text"
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="NOM D'AFFICHAGE"
+                  className="bg-slate-950 border border-slate-700 text-white text-center p-4 rounded-xl uppercase tracking-widest"
+                />
+              )}
+              <input
+                autoFocus={authMode === 'login'}
+                type="email"
+                value={emailInput}
+                onChange={e => setEmailInput(e.target.value)}
+                placeholder="EMAIL"
+                className="bg-slate-950 border border-slate-700 text-white text-center p-4 rounded-xl"
+              />
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={e => setPasswordInput(e.target.value)}
+                placeholder="MOT DE PASSE"
+                className="bg-slate-950 border border-slate-700 text-white text-center p-4 rounded-xl tracking-widest"
+              />
+              {authError && <p className="text-red-400 text-center text-sm bg-red-900/20 p-2 rounded-lg">{authError}</p>}
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl mt-1 transition-colors"
+              >
+                {authLoading ? '...' : authMode === 'login' ? 'ENTRER' : 'CRÉER MON COMPTE'}
+              </button>
+            </form>
+            <button onClick={() => setViewMode('splash')} className="w-full mt-4 text-slate-500 text-xs hover:text-slate-300">Retour</button>
           </div>
         </div>
       )}
@@ -1583,7 +1629,7 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
             </div>
             <div className="flex gap-2 items-start relative z-50">
               <button onClick={() => setShowLeaderboard(true)} className="p-3 rounded-full border bg-slate-900 border-yellow-600 text-yellow-500"><Trophy size={28} /></button>
-              <button onClick={() => { localStorage.removeItem(`stranger_player_id_${config.id}`); setMyPlayerId(null); setViewMode('setup'); }} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400"><LogOut size={28} /></button>
+              <button onClick={() => { signOut(auth); setMyPlayerId(null); setViewMode('splash'); }} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400"><LogOut size={28} /></button>
             </div>
           </div>
 
@@ -1647,102 +1693,35 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
                   <p className="text-lg">Aucun utilisateur inscrit</p>
                 </div>
               ) : (
-                collaborators.map((user, idx) => (
-                  <div key={user.id} className="bg-slate-800/80 p-4 rounded-lg flex items-center justify-between hover:bg-slate-800 transition-colors border border-slate-700/50">
+                collaborators.map((u, idx) => (
+                  <div key={u.id} className="bg-slate-800/80 p-4 rounded-lg flex items-center justify-between hover:bg-slate-800 transition-colors border border-slate-700/50">
                     <div className="flex items-center gap-4 flex-1">
                       <img
-                        src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(user.avatarSeed || user.name)}&backgroundColor=transparent`}
+                        src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(u.avatarSeed || u.name)}&backgroundColor=transparent`}
                         className="w-12 h-12 rounded border border-slate-600 bg-slate-700"
-                        alt={user.name}
+                        alt={u.name}
                       />
                       <div className="flex-1">
-                        <div className="font-bold text-white text-lg">{user.name}</div>
+                        <div className="font-bold text-white text-lg">{u.name}</div>
                         <div className="text-xs text-slate-400 flex items-center gap-3">
-                          <span>Dernière activité: {user.lastActive ? new Date(user.lastActive).toLocaleString('fr-FR') : 'Jamais'}</span>
+                          <span>{u.email || '—'}</span>
                           <span>•</span>
-                          <span className="text-blue-400">{getLevelInfo(user.lifetimeRdvs).name}</span>
+                          <span>Actif: {u.lastActive ? new Date(u.lastActive).toLocaleString('fr-FR') : 'Jamais'}</span>
+                          <span>•</span>
+                          <span className="text-blue-400">{getLevelInfo(u.lifetimeRdvs).name}</span>
                         </div>
                       </div>
-                      <div className="text-right mr-4">
-                        <div className="text-sm text-slate-400">Stats</div>
+                      <div className="text-right">
                         <div className="flex gap-3">
-                          <span className="text-blue-400 font-mono font-bold">{user.calls || 0} appels</span>
-                          <span className="text-red-400 font-mono font-bold">{user.rdvs || 0} RDV</span>
+                          <span className="text-blue-400 font-mono font-bold">{u.calls || 0} appels</span>
+                          <span className="text-red-400 font-mono font-bold">{u.rdvs || 0} RDV</span>
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleResetUserPin(user.id, user.name)}
-                      className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 shadow-lg"
-                    >
-                      <KeyRound size={16} />
-                      Réinitialiser PIN
-                    </button>
                   </div>
                 ))
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* PIN RESET CONFIRMATION MODAL */}
-      {selectedUserForReset && (
-        <div className="fixed inset-0 z-[400] bg-black/95 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-orange-600 p-8 rounded-2xl max-w-md w-full shadow-[0_0_100px_rgba(234,88,12,0.5)]">
-            {resetSuccess ? (
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="text-2xl font-black text-green-400 mb-2">PIN RÉINITIALISÉ !</h3>
-                <p className="text-slate-400">Le nouveau code a été enregistré.</p>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-2xl font-black text-white mb-4 flex items-center gap-2">
-                  <KeyRound className="text-orange-500" />
-                  RÉINITIALISER LE PIN
-                </h3>
-                <p className="text-white mb-2">
-                  Utilisateur: <span className="font-bold text-orange-400">{selectedUserForReset.name}</span>
-                </p>
-
-                <div className="bg-black border border-orange-600 p-6 rounded-xl mb-4 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-orange-900/20 to-red-900/20 animate-pulse"></div>
-                  <div className="relative z-10">
-                    <div className="text-xs text-slate-400 mb-2 uppercase font-bold text-center">Nouveau Code PIN</div>
-                    <div className="text-4xl font-mono text-orange-400 tracking-[0.5em] text-center font-black select-all cursor-pointer">
-                      {newGeneratedPin}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-orange-900/20 border border-orange-800 p-3 rounded-lg mb-6">
-                  <p className="text-orange-400 text-sm flex items-start gap-2">
-                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                    <span>Veuillez noter ce code et le communiquer à l'utilisateur. Il ne sera plus affiché après confirmation.</span>
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => { setSelectedUserForReset(null); setNewGeneratedPin(''); }}
-                    className="flex-1 bg-slate-700 hover:bg-slate-600 p-3 rounded-lg transition-colors font-bold"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={confirmPinReset}
-                    className="flex-1 bg-orange-600 hover:bg-orange-500 p-3 rounded-lg font-bold transition-colors shadow-lg"
-                  >
-                    Confirmer
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       )}
