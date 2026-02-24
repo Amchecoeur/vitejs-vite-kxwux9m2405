@@ -6,7 +6,7 @@ import {
   Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText, CalendarCheck, ChevronLeft, Book, Maximize2, X, Radio, Globe, Clock, Activity
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
   onSnapshot, writeBatch, query, getDocs, orderBy, limit, where
@@ -29,6 +29,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// --- COMPTE DE SERVICE FIREBASE (email/password) ---
+// Créer ce compte dans Firebase Console → Authentication → Add user
+const SERVICE_EMAIL = "service@strangersphoning.com";   // ← à remplacer
+const SERVICE_PASSWORD = "VOTRE_MOT_DE_PASSE_ICI";       // ← à remplacer
 
 // --- CONFIGURATIONS DES ÉQUIPES ---
 const CONFIGS = {
@@ -1136,9 +1141,10 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
     }
   }, [viewMode, isMusicMuted]);
 
-  // --- AUTHENTIFICATION ---
+  // --- AUTHENTIFICATION (email/password de service) ---
   useEffect(() => {
-    signInAnonymously(auth);
+    signInWithEmailAndPassword(auth, SERVICE_EMAIL, SERVICE_PASSWORD)
+      .catch(e => console.error("Auth Firebase échouée :", e.message));
     onAuthStateChanged(auth, u => setUser(u));
   }, []);
 
