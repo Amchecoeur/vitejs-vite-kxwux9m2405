@@ -95,18 +95,8 @@ const COLL_HISTORY = 'stranger-phoning-history';
 const COLL_CHAT = 'strangers-phoning-chat-global';
 const COLL_EVENTS = 'strangers-phoning-global-events';
 
-// Hash du code super admin (code caché)
-const SUPER_ADMIN_HASH = "1a3bfc3e"; // Hash du code réel
-const hashCode = (str) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16).substring(0, 8);
-};
-const verifySuperAdmin = (code) => hashCode(code) === SUPER_ADMIN_HASH;
+// Vérification super admin : uniquement via email Firebase authentifié
+const isSuperAdminEmail = (email) => ADMIN_EMAILS.includes(email);
 
 const AUTO_ARCHIVE_HOUR = 19; // Heure de l'archivage automatique (19h = 19:00)
 
@@ -1096,7 +1086,7 @@ const SuperAdminDashboard = ({ onClose }) => {
   );
 };
 
-const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
+const StrangerPhoningGame = ({ config, onBack }) => {
   const [user, setUser] = useState(null);
   const [collaborators, setCollaborators] = useState([]);
   const [historyList, setHistoryList] = useState([]);
@@ -1129,9 +1119,6 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   const [selectedArchive, setSelectedArchive] = useState(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
 
-  // États pour le Super Admin dans ce composant
-  const [showSuperAdminLogin, setShowSuperAdminLogin] = useState(false);
-  const [superAdminCode, setSuperAdminCode] = useState('');
 
   // Gestion des utilisateurs (admin)
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -1413,15 +1400,12 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
     await updateDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, myPlayerId), { computerThemeIndex: nextTheme });
   };
 
-  const handleSuperAdminLogin = (e) => {
-    e.preventDefault();
-    if (verifySuperAdmin(superAdminCode)) {
+  const handleModeAdmin = (e) => {
+    e.stopPropagation();
+    if (isSuperAdminEmail(user?.email)) {
       setViewMode('admin');
-      setShowSuperAdminLogin(false);
-      setSuperAdminCode('');
     } else {
-      alert("Accès refusé.");
-      setSuperAdminCode('');
+      alert("Accès réservé à l'administrateur.");
     }
   };
 
@@ -1456,28 +1440,6 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
         </div>
       )}
 
-      {/* Super Admin Login Modal */}
-      {showSuperAdminLogin && (
-        <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4">
-          <div className="bg-red-950 border border-red-600 p-6 rounded-xl w-full max-w-sm text-center">
-            <h3 className="text-red-500 font-black mb-4 uppercase tracking-widest">Sécurité Maximale</h3>
-            <form onSubmit={handleSuperAdminLogin}>
-              <input
-                type="password"
-                autoFocus
-                className="w-full bg-black border border-red-800 text-white text-center p-2 rounded mb-4"
-                placeholder="Code Maître"
-                value={superAdminCode}
-                onChange={(e) => setSuperAdminCode(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => { setShowSuperAdminLogin(false); setSuperAdminCode(''); }} className="flex-1 bg-slate-800 py-2 rounded text-xs">Annuler</button>
-                <button type="submit" className="flex-1 bg-red-600 py-2 rounded text-xs font-bold">Accéder</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* VIEW: SPLASH */}
       {viewMode === 'splash' && (
@@ -1492,7 +1454,7 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
           </div>
           {/* Bouton Mode Admin protégé par code super admin */}
           <button
-            onClick={(e) => { e.stopPropagation(); setShowSuperAdminLogin(true); }}
+            onClick={handleModeAdmin}
             className="absolute bottom-6 right-6 z-30 text-slate-400 hover:text-white bg-black/50 p-2 rounded-lg text-xs uppercase flex items-center gap-2 border border-slate-800 hover:border-red-500 transition-colors"
           >
             <Monitor size={14} /> Mode Admin
@@ -1796,9 +1758,7 @@ const performAutoArchive = async (targetAppId) => {
 export default function App() {
   const [activeApp, setActiveApp] = useState(null);
   const [hoveredApp, setHoveredApp] = useState(null);
-  const [showSuperAdminLogin, setShowSuperAdminLogin] = useState(false);
   const [showSuperAdminDashboard, setShowSuperAdminDashboard] = useState(false);
-  const [superAdminCode, setSuperAdminCode] = useState('');
 
   const titleTimerRef = useRef(null);
 
@@ -1834,26 +1794,17 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Gestion du clic long pour le Super Admin
+  // Clic long sur le titre → accès super admin si email autorisé
   const handleTitleMouseDown = () => {
     titleTimerRef.current = setTimeout(() => {
-      setShowSuperAdminLogin(true);
-    }, 3000); // 3 secondes
+      if (isSuperAdminEmail(auth.currentUser?.email)) {
+        setShowSuperAdminDashboard(true);
+      }
+    }, 3000);
   };
 
   const handleTitleMouseUp = () => {
     if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
-  };
-
-  const handleSuperAdminLogin = (e) => {
-    e.preventDefault();
-    if (verifySuperAdmin(superAdminCode)) {
-      setShowSuperAdminDashboard(true);
-      setShowSuperAdminLogin(false);
-      setSuperAdminCode('');
-    } else {
-      alert("Accès refusé.");
-    }
   };
 
   // Si le dashboard Super Admin est actif
@@ -1863,7 +1814,7 @@ export default function App() {
 
   // Si une app est sélectionnée
   if (activeApp) {
-    return <StrangerPhoningGame config={CONFIGS[activeApp]} onBack={() => setActiveApp(null)} onRequestSuperAdmin={() => setShowSuperAdminLogin(true)} />;
+    return <StrangerPhoningGame config={CONFIGS[activeApp]} onBack={() => setActiveApp(null)} />;
   }
 
   // Sinon, on affiche le HUB
@@ -1881,28 +1832,6 @@ export default function App() {
         <div className="absolute inset-0 bg-black/60"></div>
       </div>
 
-      {/* MODALE LOGIN SUPER ADMIN */}
-      {showSuperAdminLogin && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-          <div className="bg-red-950 border border-red-600 p-6 rounded-xl w-full max-w-sm text-center">
-            <h3 className="text-red-500 font-black mb-4 uppercase tracking-widest">Sécurité Maximale</h3>
-            <form onSubmit={handleSuperAdminLogin}>
-              <input
-                type="password"
-                autoFocus
-                className="w-full bg-black border border-red-800 text-white text-center p-2 rounded mb-4"
-                placeholder="Code Maître"
-                value={superAdminCode}
-                onChange={(e) => setSuperAdminCode(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setShowSuperAdminLogin(false)} className="flex-1 bg-slate-800 py-2 rounded text-xs">Annuler</button>
-                <button type="submit" className="flex-1 bg-red-600 py-2 rounded text-xs font-bold">Accéder</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       <div className="relative z-10 text-center p-8 max-w-4xl w-full">
         {/* TITRE AVEC DÉCLENCHEUR SECRET */}
