@@ -147,37 +147,51 @@ const getThemeFromName = (name) => {
 };
 
 // --- UTILS ---
+// Singleton AudioContext — évite les fuites mémoire et la limite navigateur (~6 contextes)
+let _sharedAudioCtx = null;
+const getAudioCtx = () => {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!_sharedAudioCtx || _sharedAudioCtx.state === 'closed') _sharedAudioCtx = new AC();
+    if (_sharedAudioCtx.state === 'suspended') _sharedAudioCtx.resume();
+    return _sharedAudioCtx;
+  } catch { return null; }
+};
+
 const playSound = (type, muted) => {
   if (muted) return;
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
 
-    const simpleTone = (freq, duration, typeOsc = 'sine') => {
+    // Chaque appel crée son propre oscillateur — corrige le bug OscillatorNode réutilisé
+    const note = (freq, duration, typeOsc = 'sine', startAt = 0, vol = 0.1) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = typeOsc;
-      osc.frequency.setValueAtTime(freq, now);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+      osc.frequency.setValueAtTime(freq, now + startAt);
+      gain.gain.setValueAtTime(vol, now + startAt);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + startAt + duration);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + duration);
+      osc.start(now + startAt);
+      osc.stop(now + startAt + duration + 0.05);
     };
 
-    if (type === 'click') simpleTone(800, 0.05, 'triangle');
-    else if (type === 'unlock') { simpleTone(400, 0.1, 'square'); simpleTone(600, 0.1, 'square'); simpleTone(800, 0.3, 'square'); }
-    else if (type === 'error') { simpleTone(150, 0.3, 'sawtooth'); }
-    else if (type === 'wizz') { simpleTone(150, 0.5, 'sawtooth'); simpleTone(100, 0.5, 'square'); }
-    else if (type === 'upside') { simpleTone(50, 2, 'sawtooth'); }
-    else if (type === 'taunt') { simpleTone(400, 0.1, 'square'); simpleTone(600, 0.1, 'square'); }
-    else if (type === 'message') { simpleTone(800, 0.1); }
-    else if (type === 'eraser') { simpleTone(200, 0.1, 'sawtooth'); }
-    else if (type === 'scan') { simpleTone(1200, 0.05, 'square'); setTimeout(() => simpleTone(1200, 0.05, 'square'), 100); }
+    if (type === 'click') note(800, 0.05, 'triangle');
+    else if (type === 'unlock') { note(400, 0.1, 'square', 0); note(600, 0.1, 'square', 0.1); note(800, 0.3, 'square', 0.2); }
+    else if (type === 'error') note(150, 0.3, 'sawtooth');
+    else if (type === 'wizz') { note(150, 0.5, 'sawtooth', 0); note(100, 0.5, 'square', 0); }
+    else if (type === 'upside') note(50, 2, 'sawtooth', 0, 0.05);
+    else if (type === 'taunt') { note(400, 0.1, 'square', 0); note(600, 0.1, 'square', 0.15); }
+    else if (type === 'message') note(800, 0.1);
+    else if (type === 'eraser') note(200, 0.1, 'sawtooth');
+    else if (type === 'scan') { note(1200, 0.05, 'square', 0); note(1200, 0.05, 'square', 0.1); }
     else if (type === 'coin') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'square';
       osc.frequency.setValueAtTime(988, now);
       osc.frequency.linearRampToValueAtTime(1319, now + 0.08);
@@ -186,51 +200,23 @@ const playSound = (type, muted) => {
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.4);
+      osc.stop(now + 0.45);
     }
     else if (type === 'superJackpotFun') {
-      const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00];
-      notes.forEach((freq, i) => {
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'square';
-        osc2.frequency.setValueAtTime(freq, now + i * 0.08);
-        gain2.gain.setValueAtTime(0.05, now + i * 0.08);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.3);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + i * 0.08);
-        osc2.stop(now + i * 0.08 + 0.3);
-      });
-      setTimeout(() => {
-        const chord = [523.25, 783.99, 1046.50];
-        chord.forEach(f => simpleTone(f, 0.5, 'triangle'));
-      }, notes.length * 80);
+      const freqs = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00];
+      freqs.forEach((freq, i) => note(freq, 0.3, 'square', i * 0.08, 0.05));
+      const chordStart = freqs.length * 0.08;
+      [523.25, 783.99, 1046.50].forEach(f => note(f, 0.5, 'triangle', chordStart, 0.05));
     }
-    else if (type === 'carHorn') {
-      simpleTone(300, 0.1, 'sawtooth');
-      setTimeout(() => simpleTone(300, 0.2, 'sawtooth'), 150);
-    }
+    else if (type === 'carHorn') { note(300, 0.1, 'sawtooth', 0); note(300, 0.2, 'sawtooth', 0.15); }
     else if (type === 'levelUp') {
-      const notes = [
+      const seq = [
         { f: 392.00, d: 0.08 }, { f: 523.25, d: 0.08 }, { f: 659.25, d: 0.08 },
         { f: 783.99, d: 0.08 }, { f: 1046.50, d: 0.08 }, { f: 1318.51, d: 0.08 },
         { f: 1567.98, d: 0.3 },
       ];
-      let time = now;
-      notes.forEach(n => {
-        const osc2 = ctx.createOscillator();
-        const g2 = ctx.createGain();
-        osc2.type = 'square';
-        osc2.frequency.setValueAtTime(n.f, time);
-        g2.gain.setValueAtTime(0.1, time);
-        g2.gain.exponentialRampToValueAtTime(0.01, time + n.d);
-        osc2.connect(g2);
-        g2.connect(ctx.destination);
-        osc2.start(time);
-        osc2.stop(time + n.d + 0.1);
-        time += n.d;
-      });
+      let t = 0;
+      seq.forEach(n => { note(n.f, n.d, 'square', t, 0.1); t += n.d; });
     }
   } catch (e) { }
 };
@@ -291,46 +277,81 @@ const LevelUpOverlay = ({ levelName, levelNum }) => {
   );
 };
 
+const PJ_SHORTCUTS = ['Plombier', 'Électricien', 'Peintre', 'Menuisier', 'Serrurier', 'Couvreur'];
+
 const RetroComputer = ({ computerThemeIndex, onUpdateTheme, canCustomize }) => {
   const [mode, setMode] = useState('siret');
+  // SIRET state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResult, setSearchResult] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedResult, setSelectedResult] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchStatus, setSearchStatus] = useState(null); // null | 'not_found' | 'error'
+  const [copiedKey, setCopiedKey] = useState(null);
+  const [recentSiret, setRecentSiret] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sp_recent_siret') || '[]'); } catch { return []; }
+  });
+  // Pages Jaunes state
   const [pjWhat, setPjWhat] = useState('');
   const [pjWhere, setPjWhere] = useState('');
   const [pjActive, setPjActive] = useState(false);
+  const [pjRecent, setPjRecent] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sp_recent_pj') || '[]'); } catch { return []; }
+  });
 
   const theme = COMPUTER_THEMES[computerThemeIndex % COMPUTER_THEMES.length] || COMPUTER_THEMES[0];
 
-  const handleSiretSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+  const handleSiretSearch = async (e, overrideQuery) => {
+    if (e) e.preventDefault();
+    const q = overrideQuery !== undefined ? overrideQuery : searchQuery;
+    if (!q.trim()) return;
+    if (overrideQuery !== undefined) setSearchQuery(overrideQuery);
     setIsSearching(true);
-    setSearchResult(null);
+    setSearchResults([]);
+    setSelectedResult(null);
+    setSearchStatus(null);
     playSound('scan', false);
-
     try {
-      const response = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&page=1&per_page=1`);
-      const data = await response.json();
+      const res = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&page=1&per_page=5`);
+      if (!res.ok) throw new Error('API error');
+      const data = await res.json();
       if (data.results && data.results.length > 0) {
-        setSearchResult(data.results[0]);
+        setSearchResults(data.results);
+        setSelectedResult(data.results[0]);
+        const newRecent = [q, ...recentSiret.filter(r => r !== q)].slice(0, 5);
+        setRecentSiret(newRecent);
+        localStorage.setItem('sp_recent_siret', JSON.stringify(newRecent));
       } else {
-        setSearchResult('not_found');
+        setSearchStatus('not_found');
       }
-    } catch (error) {
-      console.error("Search error", error);
-      setSearchResult('error');
+    } catch {
+      setSearchStatus('error');
     }
     setIsSearching(false);
   };
 
-  const handlePagesJaunesSearch = (e) => {
-    e.preventDefault();
-    if (!pjWhat.trim()) return;
-    const url = `https://www.pagesjaunes.fr/annuaire/chercherlespros?quoiqui=${encodeURIComponent(pjWhat)}&ou=${encodeURIComponent(pjWhere)}`;
-    window.open(url, 'PagesJaunesSearch', 'width=1200,height=800,left=100,top=100,scrollbars=yes,resizable=yes,status=no,location=no,toolbar=no,menubar=no');
+  const copyText = (text, key) => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+      playSound('click', false);
+    });
+  };
+
+  const handlePagesJaunesSearch = (e, what, where) => {
+    if (e) e.preventDefault();
+    const w = what !== undefined ? what : pjWhat;
+    const wh = where !== undefined ? where : pjWhere;
+    if (!w.trim()) return;
+    const url = `https://www.pagesjaunes.fr/annuaire/chercherlespros?quoiqui=${encodeURIComponent(w)}&ou=${encodeURIComponent(wh)}`;
+    window.open(url, 'PagesJaunesSearch', 'width=1200,height=800,left=100,top=100,scrollbars=yes,resizable=yes');
+    if (what !== undefined) setPjWhat(what);
     setPjActive(true);
     playSound('click', false);
+    const entry = { what: w, where: wh };
+    const newRecent = [entry, ...pjRecent.filter(r => r.what !== w || r.where !== wh)].slice(0, 5);
+    setPjRecent(newRecent);
+    localStorage.setItem('sp_recent_pj', JSON.stringify(newRecent));
   };
 
   return (
@@ -347,44 +368,156 @@ const RetroComputer = ({ computerThemeIndex, onUpdateTheme, canCustomize }) => {
           )}
         </div>
         <div className="relative z-0 h-full overflow-hidden p-2 font-mono text-xs">
+
+          {/* ── MODE SIRET ── */}
           {mode === 'siret' && (
             <div className={`flex flex-col h-full ${theme.text}`}>
-              <form onSubmit={handleSiretSearch} className="flex gap-1 mb-2 shrink-0">
-                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="NOM / SIRET..." className={`flex-1 ${theme.bg} border ${theme.border.replace('border-', 'border-')}/50 ${theme.text} px-2 py-1 focus:outline-none focus:border-current placeholder-current uppercase`} />
-                <button type="submit" disabled={isSearching} className={`px-2 font-bold border ${theme.border} bg-opacity-20 hover:bg-opacity-40 transition-colors`}>{isSearching ? '...' : '>'}</button>
+              <form onSubmit={handleSiretSearch} className="flex gap-1 mb-1 shrink-0">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="NOM / SIRET / SIREN..."
+                  className={`flex-1 ${theme.bg} border border-current/30 ${theme.text} px-2 py-1 focus:outline-none focus:border-current placeholder-current/40 uppercase text-[10px]`}
+                />
+                <button type="submit" disabled={isSearching} className={`px-2 font-bold border border-current/40 hover:bg-white/10 transition-colors ${isSearching ? 'animate-pulse' : ''}`}>
+                  {isSearching ? '…' : '>'}
+                </button>
               </form>
-              <div className={`flex-1 overflow-y-auto scrollbar-hide space-y-2 border ${theme.border} p-2 ${theme.bg}`}>
-                {searchResult === 'not_found' && <div className="opacity-50 text-center mt-4">CIBLE INCONNUE</div>}
-                {searchResult && typeof searchResult === 'object' && (
-                  <div className="space-y-1">
-                    <div className={`font-bold uppercase border-b ${theme.border} pb-1`}>{searchResult.nom_complet}</div>
-                    <div className="opacity-70 text-[10px]">{searchResult.siege?.adresse}</div>
-                    <div className={`mt-2 flex justify-between text-[9px] opacity-50 border-t ${theme.border} pt-1`}>
-                      <span>{searchResult.tranche_effectif_salarie || '?'} SALARIÉS</span>
-                      <span>{searchResult.etat_administratif}</span>
+              {/* Recherches récentes */}
+              {recentSiret.length > 0 && searchResults.length === 0 && !searchStatus && (
+                <div className="flex flex-wrap gap-1 mb-1 shrink-0">
+                  {recentSiret.map((r, i) => (
+                    <button key={i} onClick={() => handleSiretSearch(undefined, r)}
+                      className="text-[8px] px-1.5 py-0.5 border border-current/20 hover:border-current/60 opacity-50 hover:opacity-100 rounded transition-all truncate max-w-[100px]">
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className={`flex-1 overflow-y-auto border border-current/20 p-2 ${theme.bg}`} style={{ scrollbarWidth: 'none' }}>
+                {/* Idle */}
+                {!searchStatus && searchResults.length === 0 && !isSearching && (
+                  <div className="flex items-center justify-center h-full opacity-20 text-[10px]">
+                    <div className="text-center"><Search size={18} className="mx-auto mb-1" /><div>PRÊT</div></div>
+                  </div>
+                )}
+                {/* Not found */}
+                {searchStatus === 'not_found' && (
+                  <div className="flex flex-col items-center justify-center h-full opacity-50 gap-1">
+                    <Search size={18} /><div className="text-[10px]">CIBLE INCONNUE</div>
+                  </div>
+                )}
+                {/* Error */}
+                {searchStatus === 'error' && (
+                  <div className="flex flex-col items-center justify-center h-full gap-2">
+                    <AlertCircle size={18} className="text-red-400" />
+                    <div className="text-[10px] text-red-400">CONNEXION ÉCHOUÉE</div>
+                    <button onClick={() => handleSiretSearch(undefined, searchQuery)} className="text-[8px] border border-current/30 px-2 py-0.5 hover:bg-white/10">RÉESSAYER</button>
+                  </div>
+                )}
+                {/* Onglets multi-résultats */}
+                {searchResults.length > 1 && (
+                  <div className="flex gap-1 mb-2 flex-wrap shrink-0">
+                    {searchResults.map((r, i) => (
+                      <button key={i} onClick={() => setSelectedResult(r)}
+                        className={`text-[8px] px-1.5 py-0.5 rounded border transition-colors truncate max-w-[90px] ${selectedResult === r ? 'border-current bg-white/10' : 'border-current/20 opacity-40 hover:opacity-80'}`}>
+                        {r.nom_complet?.split(' ').slice(0, 2).join(' ') || `#${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Fiche entreprise */}
+                {selectedResult && typeof selectedResult === 'object' && (
+                  <div className="space-y-1.5 text-[10px]">
+                    <div className="font-bold uppercase border-b border-current/20 pb-1 flex items-start justify-between gap-1">
+                      <span className="flex-1 leading-tight">{selectedResult.nom_complet}</span>
+                      <button onClick={() => copyText(selectedResult.nom_complet, 'name')} className="opacity-40 hover:opacity-100 flex-shrink-0" title="Copier le nom">
+                        {copiedKey === 'name' ? <span className="text-green-400 text-[8px]">✓</span> : <FileText size={10} />}
+                      </button>
+                    </div>
+                    {selectedResult.siren && (
+                      <div className="flex justify-between items-center">
+                        <span className="opacity-40">SIREN</span>
+                        <span className="font-bold tracking-widest">{selectedResult.siren}</span>
+                      </div>
+                    )}
+                    {selectedResult.siege?.adresse && (
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="flex items-start gap-1 flex-1 min-w-0">
+                          <MapPin size={9} className="opacity-40 mt-0.5 flex-shrink-0" />
+                          <span className="opacity-75 leading-tight">{selectedResult.siege.adresse}</span>
+                        </div>
+                        <button onClick={() => copyText(selectedResult.siege.adresse, 'addr')} className="opacity-40 hover:opacity-100 flex-shrink-0" title="Copier l'adresse">
+                          {copiedKey === 'addr' ? <span className="text-green-400 text-[8px]">✓</span> : <FileText size={9} />}
+                        </button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-1 opacity-60">
+                      {selectedResult.activite_principale && <div><span className="opacity-60">NAF </span>{selectedResult.activite_principale}</div>}
+                      {selectedResult.forme_juridique && <div className="truncate">{selectedResult.forme_juridique}</div>}
+                    </div>
+                    <div className="flex justify-between border-t border-current/20 pt-1">
+                      <span className="opacity-50 flex items-center gap-1"><Users size={8} />{selectedResult.tranche_effectif_salarie ?? '?'} sal.</span>
+                      <span className={`font-bold ${selectedResult.etat_administratif === 'A' ? 'text-green-400' : 'text-red-400'}`}>
+                        {selectedResult.etat_administratif === 'A' ? '● ACTIF' : '● FERMÉ'}
+                      </span>
                     </div>
                   </div>
                 )}
               </div>
             </div>
           )}
+
+          {/* ── MODE PAGES JAUNES ── */}
           {mode === 'pagesjaunes' && (
-            <div className="flex flex-col h-full text-yellow-500 items-center justify-center text-center p-4 space-y-4">
+            <div className="flex flex-col h-full text-yellow-500">
               {!pjActive ? (
-                <form onSubmit={handlePagesJaunesSearch} className="space-y-2 w-full">
-                  <input type="text" value={pjWhat} onChange={(e) => setPjWhat(e.target.value)} placeholder="ACTIVITÉ / NOM" className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase" />
-                  <input type="text" value={pjWhere} onChange={(e) => setPjWhere(e.target.value)} placeholder="LOCALITÉ" className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase" />
-                  <button type="submit" className="w-full mt-2 border border-yellow-600 bg-yellow-900/20 text-yellow-500 py-1 hover:bg-yellow-600 hover:text-black transition-colors font-bold">RECHERCHER</button>
-                </form>
-              ) : (
                 <>
-                  <Radio size={48} className="animate-pulse text-yellow-500" />
-                  <p className="text-[10px] opacity-70">TERMINAL SECONDAIRE OUVERT.</p>
-                  <button onClick={() => setPjActive(false)} className="mt-4 text-[9px] underline hover:text-white">NOUVELLE RECHERCHE</button>
+                  <form onSubmit={handlePagesJaunesSearch} className="space-y-1 mb-1.5 shrink-0">
+                    <input type="text" value={pjWhat} onChange={(e) => setPjWhat(e.target.value)} placeholder="ACTIVITÉ / NOM"
+                      className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase text-[10px] focus:outline-none focus:border-yellow-500" />
+                    <input type="text" value={pjWhere} onChange={(e) => setPjWhere(e.target.value)} placeholder="LOCALITÉ (ex: Paris 75)"
+                      className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase text-[10px] focus:outline-none focus:border-yellow-500" />
+                    <button type="submit" className="w-full border border-yellow-600 bg-yellow-900/20 text-yellow-500 py-1 hover:bg-yellow-600 hover:text-black transition-colors font-bold text-[10px]">RECHERCHER →</button>
+                  </form>
+                  {/* Raccourcis métiers */}
+                  <div className="flex flex-wrap gap-1 shrink-0 mb-1.5">
+                    {PJ_SHORTCUTS.map(s => (
+                      <button key={s} onClick={() => handlePagesJaunesSearch(undefined, s, pjWhere)}
+                        className="text-[8px] px-1.5 py-0.5 border border-yellow-800/40 hover:border-yellow-500 text-yellow-700 hover:text-yellow-400 rounded transition-colors">
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Recherches récentes */}
+                  {pjRecent.length > 0 && (
+                    <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                      <div className="text-[8px] opacity-30 mb-0.5 uppercase">Récents</div>
+                      {pjRecent.map((r, i) => (
+                        <button key={i} onClick={() => { setPjWhat(r.what); setPjWhere(r.where); handlePagesJaunesSearch(undefined, r.what, r.where); }}
+                          className="w-full text-left text-[9px] px-1.5 py-0.5 border border-yellow-900/20 hover:border-yellow-600 text-yellow-600/70 hover:text-yellow-400 transition-colors truncate flex items-center gap-1 mb-0.5">
+                          <Search size={7} className="flex-shrink-0" />
+                          {r.what}{r.where ? ` — ${r.where}` : ''}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-2">
+                  <Radio size={36} className="animate-pulse" />
+                  <p className="text-[10px] opacity-70 uppercase">Terminal ouvert</p>
+                  <p className="text-[9px] opacity-50 truncate max-w-full px-2">{pjWhat}{pjWhere ? ` · ${pjWhere}` : ''}</p>
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => handlePagesJaunesSearch(undefined, pjWhat, pjWhere)} className="text-[9px] border border-yellow-600 px-2 py-0.5 hover:bg-yellow-900/30">Relancer</button>
+                    <button onClick={() => setPjActive(false)} className="text-[9px] border border-yellow-900/40 px-2 py-0.5 hover:border-yellow-600 opacity-50 hover:opacity-100">Nouvelle</button>
+                  </div>
+                </div>
               )}
             </div>
           )}
+
         </div>
       </div>
     </div>
@@ -394,92 +527,132 @@ const RetroComputer = ({ computerThemeIndex, onUpdateTheme, canCustomize }) => {
 const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex, appId }) => {
   const [activeTab, setActiveTab] = useState('J1');
   const [notes, setNotes] = useState(initialData || { J1: '', J2: '', J3: '' });
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [copied, setCopied] = useState(false);
   const timeoutRef = useRef(null);
+  const notesRef = useRef(notes); // Évite les stale closures dans le raccourci clavier
   const themeStyle = NOTEPAD_THEMES[noteThemeIndex % NOTEPAD_THEMES.length] || NOTEPAD_THEMES[0];
   const canCustomize = currentLevel.lvl >= 7;
 
+  useEffect(() => { notesRef.current = notes; }, [notes]);
   useEffect(() => { if (initialData) setNotes(initialData); }, [initialData]);
 
-  const handleNoteChange = (e) => {
-    const newVal = e.target.value;
-    const newNotes = { ...notes, [activeTab]: newVal };
-    setNotes(newNotes);
-    setIsSaving(true);
+  const saveNow = async (data) => {
+    const toSave = data !== undefined ? data : notesRef.current;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(async () => {
-      try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { [`notes`]: newNotes, lastActive: Date.now() });
-        setIsSaving(false);
-      } catch (err) { }
-    }, 1500);
+    setSaveStatus('saving');
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { notes: toSave, lastActive: Date.now() });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+  };
+
+  // Raccourci Ctrl+S / Cmd+S
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveNow(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []); // utilise notesRef — pas de stale closure
+
+  const handleNoteChange = (e) => {
+    const newNotes = { ...notes, [activeTab]: e.target.value };
+    setNotes(newNotes);
+    setSaveStatus('saving');
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => saveNow(newNotes), 1500);
   };
 
   const clearPage = async () => {
+    if (!(notes[activeTab] || '').trim()) return;
     playSound('eraser', false);
     const newNotes = { ...notes, [activeTab]: '' };
     setNotes(newNotes);
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { [`notes`]: newNotes, lastActive: Date.now() });
+    await saveNow(newNotes);
   };
 
   const cycleTheme = async () => {
     if (!canCustomize) return;
-    const nextIndex = (noteThemeIndex + 1) % NOTEPAD_THEMES.length;
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { noteThemeIndex: nextIndex });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { noteThemeIndex: (noteThemeIndex + 1) % NOTEPAD_THEMES.length });
   };
+
+  const copyTab = () => {
+    const text = notes[activeTab] || '';
+    if (!text.trim()) return;
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      playSound('click', false);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const charCount = (notes[activeTab] || '').length;
+  const lineCount = (notes[activeTab] || '').split('\n').length;
+  const saveIcon = saveStatus === 'saving'
+    ? <span className="animate-pulse opacity-50 text-[8px]">…</span>
+    : saveStatus === 'saved' ? <span className="text-green-400 text-[8px]">✓</span>
+    : saveStatus === 'error' ? <span className="text-red-400 text-[8px]" title="Erreur de sauvegarde">!</span>
+    : <Save size={9} className="opacity-30" />;
 
   return (
     <div
       className="w-full max-w-md h-80 rounded-lg border-2 flex flex-col font-mono overflow-hidden relative transform rotate-1 lg:mt-0 mt-8 backdrop-blur-md shadow-2xl"
-      style={{
-        backgroundColor: themeStyle.bg + 'E6',
-        borderColor: themeStyle.text,
-        boxShadow: `0 0 20px ${themeStyle.text}40`
-      }}
+      style={{ backgroundColor: themeStyle.bg + 'E6', borderColor: themeStyle.text, boxShadow: `0 0 20px ${themeStyle.text}40` }}
     >
+      {/* Barre titre */}
       <div className="h-8 bg-black/50 flex justify-between items-center px-2 border-b border-white/10 shrink-0">
         <div className="flex gap-1">
           {[...Array(3)].map((_, i) => <div key={i} className="w-1.5 h-4 bg-slate-500 rounded-full"></div>)}
         </div>
         <div className="flex items-center gap-2">
           {canCustomize && (
-            <button onClick={cycleTheme} className="text-[10px] uppercase font-bold text-white bg-white/20 px-2 py-1 rounded hover:bg-white/30 flex items-center gap-1">
-              <Settings size={10} /> Skin
+            <button onClick={cycleTheme} className="text-[9px] uppercase font-bold text-white bg-white/20 px-1.5 py-0.5 rounded hover:bg-white/30 flex items-center gap-1">
+              <Settings size={9} /> Skin
             </button>
           )}
-          <button onClick={clearPage} className="text-white hover:text-red-400 transition-colors" title="Effacer la page">
-            <Eraser size={14} />
+          <button onClick={copyTab} className={`transition-colors ${copied ? 'text-green-400' : 'text-white/50 hover:text-white'}`} title="Copier le contenu">
+            {copied ? <span className="text-[10px]">✓</span> : <FileText size={13} />}
+          </button>
+          <button onClick={clearPage} className="text-white/50 hover:text-red-400 transition-colors" title="Effacer la page">
+            <Eraser size={13} />
           </button>
         </div>
       </div>
 
+      {/* Onglets — un point indique qu'un onglet contient du texte */}
       <div className="flex bg-black/20 shrink-0">
-        {['J1', 'J2', 'J3'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 font-bold text-xs border-r border-white/10 transition-all ${activeTab === tab ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
-            style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}
-          >
-            {tab}
-          </button>
-        ))}
+        {['J1', 'J2', 'J3'].map(tab => {
+          const hasContent = !!(notes[tab] || '').trim();
+          return (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-1.5 font-bold text-[11px] border-r border-white/10 transition-all flex items-center justify-center gap-1 ${activeTab === tab ? 'opacity-100' : 'opacity-40 hover:opacity-70'}`}
+              style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}>
+              {tab}
+              {hasContent && <span className="w-1 h-1 rounded-full bg-current opacity-80 flex-shrink-0"></span>}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex-1 relative p-4 overflow-hidden">
+      {/* Zone de saisie */}
+      <div className="flex-1 relative p-3 overflow-hidden">
         <textarea
           value={notes[activeTab] || ''}
           onChange={handleNoteChange}
-          placeholder={`// Notes du ${activeTab}...`}
-          className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px] font-bold"
-          style={{
-            fontFamily: "'Courier New', Courier, monospace",
-            color: themeStyle.text,
-            textShadow: `0 0 2px ${themeStyle.text}40`
-          }}
+          placeholder={`Notes ${activeTab}… (Ctrl+S)`}
+          className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px]"
+          style={{ fontFamily: "'Courier New', Courier, monospace", color: themeStyle.text, textShadow: `0 0 2px ${themeStyle.text}30` }}
+          spellCheck={false}
         />
-        <div className="absolute bottom-2 right-2 text-[10px] font-bold uppercase flex items-center gap-1">
-          {isSaving ? <span className="animate-pulse opacity-50" style={{ color: themeStyle.text }}>...</span> : <span className="flex items-center gap-1 opacity-70" style={{ color: themeStyle.text }}><Save size={10} /></span>}
+        {/* Barre de statut : compteur + indicateur de sauvegarde */}
+        <div className="absolute bottom-1.5 right-2 flex items-center gap-2" style={{ color: themeStyle.text }}>
+          <span className="opacity-25 text-[9px]">{lineCount}L · {charCount}c</span>
+          <span className="opacity-70">{saveIcon}</span>
         </div>
       </div>
     </div>
