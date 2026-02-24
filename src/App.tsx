@@ -6,9 +6,9 @@ import {
   Send, Minimize2, Zap, Move, RotateCw, Save, Lock, KeyRound, Settings, Briefcase, Skull, Car, Eraser, Search, MapPin, Building, User, Users, DollarSign, FileText, CalendarCheck, ChevronLeft, Book, Maximize2, X, Radio, Globe, Clock, Activity
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
-  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc,
   onSnapshot, writeBatch, query, getDocs, orderBy, limit, where
 } from 'firebase/firestore';
 
@@ -17,18 +17,39 @@ import {
 // ==========================================
 
 // --- FIREBASE ---
+// Clés lues depuis .env (local) ou les variables d'environnement Vercel
 const firebaseConfig = {
-  apiKey: "AIzaSyC9zC-MEA3bpP8gUHW3RdDixHf4o_DkB2k",
-  authDomain: "strangersphoning.firebaseapp.com",
-  projectId: "strangersphoning",
-  storageBucket: "strangersphoning.firebasestorage.app",
-  messagingSenderId: "28192352824",
-  appId: "1:28192352824:web:09d9d5eae72c0853f954cd"
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// --- ADMINS — emails autorisés à accéder aux vues admin directement ---
+// Ajoutez ici votre email (ou plusieurs séparés par des virgules)
+const ADMIN_EMAILS = [
+  "anthony.campolo@adn-entreprise.fr",
+];
+
+// --- HELPER ERREURS FIREBASE AUTH ---
+const getFirebaseAuthError = (code) => {
+  switch (code) {
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential': return 'Email ou mot de passe incorrect';
+    case 'auth/email-already-in-use': return 'Cet email est déjà utilisé';
+    case 'auth/invalid-email': return 'Adresse email invalide';
+    case 'auth/weak-password': return 'Mot de passe trop faible (6 caractères min)';
+    case 'auth/too-many-requests': return 'Trop de tentatives, réessayez dans quelques minutes';
+    default: return 'Erreur de connexion';
+  }
+};
 
 // --- CONFIGURATIONS DES ÉQUIPES ---
 const CONFIGS = {
@@ -147,37 +168,51 @@ const getThemeFromName = (name) => {
 };
 
 // --- UTILS ---
+// Singleton AudioContext — évite les fuites mémoire et la limite navigateur (~6 contextes)
+let _sharedAudioCtx = null;
+const getAudioCtx = () => {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!_sharedAudioCtx || _sharedAudioCtx.state === 'closed') _sharedAudioCtx = new AC();
+    if (_sharedAudioCtx.state === 'suspended') _sharedAudioCtx.resume();
+    return _sharedAudioCtx;
+  } catch { return null; }
+};
+
 const playSound = (type, muted) => {
   if (muted) return;
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
 
-    const simpleTone = (freq, duration, typeOsc = 'sine') => {
+    // Chaque appel crée son propre oscillateur — corrige le bug OscillatorNode réutilisé
+    const note = (freq, duration, typeOsc = 'sine', startAt = 0, vol = 0.1) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = typeOsc;
-      osc.frequency.setValueAtTime(freq, now);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+      osc.frequency.setValueAtTime(freq, now + startAt);
+      gain.gain.setValueAtTime(vol, now + startAt);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + startAt + duration);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + duration);
+      osc.start(now + startAt);
+      osc.stop(now + startAt + duration + 0.05);
     };
 
-    if (type === 'click') simpleTone(800, 0.05, 'triangle');
-    else if (type === 'unlock') { simpleTone(400, 0.1, 'square'); simpleTone(600, 0.1, 'square'); simpleTone(800, 0.3, 'square'); }
-    else if (type === 'error') { simpleTone(150, 0.3, 'sawtooth'); }
-    else if (type === 'wizz') { simpleTone(150, 0.5, 'sawtooth'); simpleTone(100, 0.5, 'square'); }
-    else if (type === 'upside') { simpleTone(50, 2, 'sawtooth'); }
-    else if (type === 'taunt') { simpleTone(400, 0.1, 'square'); simpleTone(600, 0.1, 'square'); }
-    else if (type === 'message') { simpleTone(800, 0.1); }
-    else if (type === 'eraser') { simpleTone(200, 0.1, 'sawtooth'); }
-    else if (type === 'scan') { simpleTone(1200, 0.05, 'square'); setTimeout(() => simpleTone(1200, 0.05, 'square'), 100); }
+    if (type === 'click') note(800, 0.05, 'triangle');
+    else if (type === 'unlock') { note(400, 0.1, 'square', 0); note(600, 0.1, 'square', 0.1); note(800, 0.3, 'square', 0.2); }
+    else if (type === 'error') note(150, 0.3, 'sawtooth');
+    else if (type === 'wizz') { note(150, 0.5, 'sawtooth', 0); note(100, 0.5, 'square', 0); }
+    else if (type === 'upside') note(50, 2, 'sawtooth', 0, 0.05);
+    else if (type === 'taunt') { note(400, 0.1, 'square', 0); note(600, 0.1, 'square', 0.15); }
+    else if (type === 'message') note(800, 0.1);
+    else if (type === 'eraser') note(200, 0.1, 'sawtooth');
+    else if (type === 'scan') { note(1200, 0.05, 'square', 0); note(1200, 0.05, 'square', 0.1); }
     else if (type === 'coin') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'square';
       osc.frequency.setValueAtTime(988, now);
       osc.frequency.linearRampToValueAtTime(1319, now + 0.08);
@@ -186,51 +221,23 @@ const playSound = (type, muted) => {
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.4);
+      osc.stop(now + 0.45);
     }
     else if (type === 'superJackpotFun') {
-      const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00];
-      notes.forEach((freq, i) => {
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'square';
-        osc2.frequency.setValueAtTime(freq, now + i * 0.08);
-        gain2.gain.setValueAtTime(0.05, now + i * 0.08);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.3);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + i * 0.08);
-        osc2.stop(now + i * 0.08 + 0.3);
-      });
-      setTimeout(() => {
-        const chord = [523.25, 783.99, 1046.50];
-        chord.forEach(f => simpleTone(f, 0.5, 'triangle'));
-      }, notes.length * 80);
+      const freqs = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00];
+      freqs.forEach((freq, i) => note(freq, 0.3, 'square', i * 0.08, 0.05));
+      const chordStart = freqs.length * 0.08;
+      [523.25, 783.99, 1046.50].forEach(f => note(f, 0.5, 'triangle', chordStart, 0.05));
     }
-    else if (type === 'carHorn') {
-      simpleTone(300, 0.1, 'sawtooth');
-      setTimeout(() => simpleTone(300, 0.2, 'sawtooth'), 150);
-    }
+    else if (type === 'carHorn') { note(300, 0.1, 'sawtooth', 0); note(300, 0.2, 'sawtooth', 0.15); }
     else if (type === 'levelUp') {
-      const notes = [
+      const seq = [
         { f: 392.00, d: 0.08 }, { f: 523.25, d: 0.08 }, { f: 659.25, d: 0.08 },
         { f: 783.99, d: 0.08 }, { f: 1046.50, d: 0.08 }, { f: 1318.51, d: 0.08 },
         { f: 1567.98, d: 0.3 },
       ];
-      let time = now;
-      notes.forEach(n => {
-        const osc2 = ctx.createOscillator();
-        const g2 = ctx.createGain();
-        osc2.type = 'square';
-        osc2.frequency.setValueAtTime(n.f, time);
-        g2.gain.setValueAtTime(0.1, time);
-        g2.gain.exponentialRampToValueAtTime(0.01, time + n.d);
-        osc2.connect(g2);
-        g2.connect(ctx.destination);
-        osc2.start(time);
-        osc2.stop(time + n.d + 0.1);
-        time += n.d;
-      });
+      let t = 0;
+      seq.forEach(n => { note(n.f, n.d, 'square', t, 0.1); t += n.d; });
     }
   } catch (e) { }
 };
@@ -291,46 +298,81 @@ const LevelUpOverlay = ({ levelName, levelNum }) => {
   );
 };
 
+const PJ_SHORTCUTS = ['Plombier', 'Électricien', 'Peintre', 'Menuisier', 'Serrurier', 'Couvreur'];
+
 const RetroComputer = ({ computerThemeIndex, onUpdateTheme, canCustomize }) => {
   const [mode, setMode] = useState('siret');
+  // SIRET state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResult, setSearchResult] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedResult, setSelectedResult] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchStatus, setSearchStatus] = useState(null); // null | 'not_found' | 'error'
+  const [copiedKey, setCopiedKey] = useState(null);
+  const [recentSiret, setRecentSiret] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sp_recent_siret') || '[]'); } catch { return []; }
+  });
+  // Pages Jaunes state
   const [pjWhat, setPjWhat] = useState('');
   const [pjWhere, setPjWhere] = useState('');
   const [pjActive, setPjActive] = useState(false);
+  const [pjRecent, setPjRecent] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sp_recent_pj') || '[]'); } catch { return []; }
+  });
 
   const theme = COMPUTER_THEMES[computerThemeIndex % COMPUTER_THEMES.length] || COMPUTER_THEMES[0];
 
-  const handleSiretSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+  const handleSiretSearch = async (e, overrideQuery) => {
+    if (e) e.preventDefault();
+    const q = overrideQuery !== undefined ? overrideQuery : searchQuery;
+    if (!q.trim()) return;
+    if (overrideQuery !== undefined) setSearchQuery(overrideQuery);
     setIsSearching(true);
-    setSearchResult(null);
+    setSearchResults([]);
+    setSelectedResult(null);
+    setSearchStatus(null);
     playSound('scan', false);
-
     try {
-      const response = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&page=1&per_page=1`);
-      const data = await response.json();
+      const res = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&page=1&per_page=5`);
+      if (!res.ok) throw new Error('API error');
+      const data = await res.json();
       if (data.results && data.results.length > 0) {
-        setSearchResult(data.results[0]);
+        setSearchResults(data.results);
+        setSelectedResult(data.results[0]);
+        const newRecent = [q, ...recentSiret.filter(r => r !== q)].slice(0, 5);
+        setRecentSiret(newRecent);
+        localStorage.setItem('sp_recent_siret', JSON.stringify(newRecent));
       } else {
-        setSearchResult('not_found');
+        setSearchStatus('not_found');
       }
-    } catch (error) {
-      console.error("Search error", error);
-      setSearchResult('error');
+    } catch {
+      setSearchStatus('error');
     }
     setIsSearching(false);
   };
 
-  const handlePagesJaunesSearch = (e) => {
-    e.preventDefault();
-    if (!pjWhat.trim()) return;
-    const url = `https://www.pagesjaunes.fr/annuaire/chercherlespros?quoiqui=${encodeURIComponent(pjWhat)}&ou=${encodeURIComponent(pjWhere)}`;
-    window.open(url, 'PagesJaunesSearch', 'width=1200,height=800,left=100,top=100,scrollbars=yes,resizable=yes,status=no,location=no,toolbar=no,menubar=no');
+  const copyText = (text, key) => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+      playSound('click', false);
+    });
+  };
+
+  const handlePagesJaunesSearch = (e, what, where) => {
+    if (e) e.preventDefault();
+    const w = what !== undefined ? what : pjWhat;
+    const wh = where !== undefined ? where : pjWhere;
+    if (!w.trim()) return;
+    const url = `https://www.pagesjaunes.fr/annuaire/chercherlespros?quoiqui=${encodeURIComponent(w)}&ou=${encodeURIComponent(wh)}`;
+    window.open(url, 'PagesJaunesSearch', 'width=1200,height=800,left=100,top=100,scrollbars=yes,resizable=yes');
+    if (what !== undefined) setPjWhat(what);
     setPjActive(true);
     playSound('click', false);
+    const entry = { what: w, where: wh };
+    const newRecent = [entry, ...pjRecent.filter(r => r.what !== w || r.where !== wh)].slice(0, 5);
+    setPjRecent(newRecent);
+    localStorage.setItem('sp_recent_pj', JSON.stringify(newRecent));
   };
 
   return (
@@ -347,44 +389,156 @@ const RetroComputer = ({ computerThemeIndex, onUpdateTheme, canCustomize }) => {
           )}
         </div>
         <div className="relative z-0 h-full overflow-hidden p-2 font-mono text-xs">
+
+          {/* ── MODE SIRET ── */}
           {mode === 'siret' && (
             <div className={`flex flex-col h-full ${theme.text}`}>
-              <form onSubmit={handleSiretSearch} className="flex gap-1 mb-2 shrink-0">
-                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="NOM / SIRET..." className={`flex-1 ${theme.bg} border ${theme.border.replace('border-', 'border-')}/50 ${theme.text} px-2 py-1 focus:outline-none focus:border-current placeholder-current uppercase`} />
-                <button type="submit" disabled={isSearching} className={`px-2 font-bold border ${theme.border} bg-opacity-20 hover:bg-opacity-40 transition-colors`}>{isSearching ? '...' : '>'}</button>
+              <form onSubmit={handleSiretSearch} className="flex gap-1 mb-1 shrink-0">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="NOM / SIRET / SIREN..."
+                  className={`flex-1 ${theme.bg} border border-current/30 ${theme.text} px-2 py-1 focus:outline-none focus:border-current placeholder-current/40 uppercase text-[10px]`}
+                />
+                <button type="submit" disabled={isSearching} className={`px-2 font-bold border border-current/40 hover:bg-white/10 transition-colors ${isSearching ? 'animate-pulse' : ''}`}>
+                  {isSearching ? '…' : '>'}
+                </button>
               </form>
-              <div className={`flex-1 overflow-y-auto scrollbar-hide space-y-2 border ${theme.border} p-2 ${theme.bg}`}>
-                {searchResult === 'not_found' && <div className="opacity-50 text-center mt-4">CIBLE INCONNUE</div>}
-                {searchResult && typeof searchResult === 'object' && (
-                  <div className="space-y-1">
-                    <div className={`font-bold uppercase border-b ${theme.border} pb-1`}>{searchResult.nom_complet}</div>
-                    <div className="opacity-70 text-[10px]">{searchResult.siege?.adresse}</div>
-                    <div className={`mt-2 flex justify-between text-[9px] opacity-50 border-t ${theme.border} pt-1`}>
-                      <span>{searchResult.tranche_effectif_salarie || '?'} SALARIÉS</span>
-                      <span>{searchResult.etat_administratif}</span>
+              {/* Recherches récentes */}
+              {recentSiret.length > 0 && searchResults.length === 0 && !searchStatus && (
+                <div className="flex flex-wrap gap-1 mb-1 shrink-0">
+                  {recentSiret.map((r, i) => (
+                    <button key={i} onClick={() => handleSiretSearch(undefined, r)}
+                      className="text-[8px] px-1.5 py-0.5 border border-current/20 hover:border-current/60 opacity-50 hover:opacity-100 rounded transition-all truncate max-w-[100px]">
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className={`flex-1 overflow-y-auto border border-current/20 p-2 ${theme.bg}`} style={{ scrollbarWidth: 'none' }}>
+                {/* Idle */}
+                {!searchStatus && searchResults.length === 0 && !isSearching && (
+                  <div className="flex items-center justify-center h-full opacity-20 text-[10px]">
+                    <div className="text-center"><Search size={18} className="mx-auto mb-1" /><div>PRÊT</div></div>
+                  </div>
+                )}
+                {/* Not found */}
+                {searchStatus === 'not_found' && (
+                  <div className="flex flex-col items-center justify-center h-full opacity-50 gap-1">
+                    <Search size={18} /><div className="text-[10px]">CIBLE INCONNUE</div>
+                  </div>
+                )}
+                {/* Error */}
+                {searchStatus === 'error' && (
+                  <div className="flex flex-col items-center justify-center h-full gap-2">
+                    <AlertCircle size={18} className="text-red-400" />
+                    <div className="text-[10px] text-red-400">CONNEXION ÉCHOUÉE</div>
+                    <button onClick={() => handleSiretSearch(undefined, searchQuery)} className="text-[8px] border border-current/30 px-2 py-0.5 hover:bg-white/10">RÉESSAYER</button>
+                  </div>
+                )}
+                {/* Onglets multi-résultats */}
+                {searchResults.length > 1 && (
+                  <div className="flex gap-1 mb-2 flex-wrap shrink-0">
+                    {searchResults.map((r, i) => (
+                      <button key={i} onClick={() => setSelectedResult(r)}
+                        className={`text-[8px] px-1.5 py-0.5 rounded border transition-colors truncate max-w-[90px] ${selectedResult === r ? 'border-current bg-white/10' : 'border-current/20 opacity-40 hover:opacity-80'}`}>
+                        {r.nom_complet?.split(' ').slice(0, 2).join(' ') || `#${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Fiche entreprise */}
+                {selectedResult && typeof selectedResult === 'object' && (
+                  <div className="space-y-1.5 text-[10px]">
+                    <div className="font-bold uppercase border-b border-current/20 pb-1 flex items-start justify-between gap-1">
+                      <span className="flex-1 leading-tight">{selectedResult.nom_complet}</span>
+                      <button onClick={() => copyText(selectedResult.nom_complet, 'name')} className="opacity-40 hover:opacity-100 flex-shrink-0" title="Copier le nom">
+                        {copiedKey === 'name' ? <span className="text-green-400 text-[8px]">✓</span> : <FileText size={10} />}
+                      </button>
+                    </div>
+                    {selectedResult.siren && (
+                      <div className="flex justify-between items-center">
+                        <span className="opacity-40">SIREN</span>
+                        <span className="font-bold tracking-widest">{selectedResult.siren}</span>
+                      </div>
+                    )}
+                    {selectedResult.siege?.adresse && (
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="flex items-start gap-1 flex-1 min-w-0">
+                          <MapPin size={9} className="opacity-40 mt-0.5 flex-shrink-0" />
+                          <span className="opacity-75 leading-tight">{selectedResult.siege.adresse}</span>
+                        </div>
+                        <button onClick={() => copyText(selectedResult.siege.adresse, 'addr')} className="opacity-40 hover:opacity-100 flex-shrink-0" title="Copier l'adresse">
+                          {copiedKey === 'addr' ? <span className="text-green-400 text-[8px]">✓</span> : <FileText size={9} />}
+                        </button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-1 opacity-60">
+                      {selectedResult.activite_principale && <div><span className="opacity-60">NAF </span>{selectedResult.activite_principale}</div>}
+                      {selectedResult.forme_juridique && <div className="truncate">{selectedResult.forme_juridique}</div>}
+                    </div>
+                    <div className="flex justify-between border-t border-current/20 pt-1">
+                      <span className="opacity-50 flex items-center gap-1"><Users size={8} />{selectedResult.tranche_effectif_salarie ?? '?'} sal.</span>
+                      <span className={`font-bold ${selectedResult.etat_administratif === 'A' ? 'text-green-400' : 'text-red-400'}`}>
+                        {selectedResult.etat_administratif === 'A' ? '● ACTIF' : '● FERMÉ'}
+                      </span>
                     </div>
                   </div>
                 )}
               </div>
             </div>
           )}
+
+          {/* ── MODE PAGES JAUNES ── */}
           {mode === 'pagesjaunes' && (
-            <div className="flex flex-col h-full text-yellow-500 items-center justify-center text-center p-4 space-y-4">
+            <div className="flex flex-col h-full text-yellow-500">
               {!pjActive ? (
-                <form onSubmit={handlePagesJaunesSearch} className="space-y-2 w-full">
-                  <input type="text" value={pjWhat} onChange={(e) => setPjWhat(e.target.value)} placeholder="ACTIVITÉ / NOM" className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase" />
-                  <input type="text" value={pjWhere} onChange={(e) => setPjWhere(e.target.value)} placeholder="LOCALITÉ" className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase" />
-                  <button type="submit" className="w-full mt-2 border border-yellow-600 bg-yellow-900/20 text-yellow-500 py-1 hover:bg-yellow-600 hover:text-black transition-colors font-bold">RECHERCHER</button>
-                </form>
-              ) : (
                 <>
-                  <Radio size={48} className="animate-pulse text-yellow-500" />
-                  <p className="text-[10px] opacity-70">TERMINAL SECONDAIRE OUVERT.</p>
-                  <button onClick={() => setPjActive(false)} className="mt-4 text-[9px] underline hover:text-white">NOUVELLE RECHERCHE</button>
+                  <form onSubmit={handlePagesJaunesSearch} className="space-y-1 mb-1.5 shrink-0">
+                    <input type="text" value={pjWhat} onChange={(e) => setPjWhat(e.target.value)} placeholder="ACTIVITÉ / NOM"
+                      className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase text-[10px] focus:outline-none focus:border-yellow-500" />
+                    <input type="text" value={pjWhere} onChange={(e) => setPjWhere(e.target.value)} placeholder="LOCALITÉ (ex: Paris 75)"
+                      className="w-full bg-yellow-900/10 border border-yellow-800/50 text-yellow-400 px-2 py-1 uppercase text-[10px] focus:outline-none focus:border-yellow-500" />
+                    <button type="submit" className="w-full border border-yellow-600 bg-yellow-900/20 text-yellow-500 py-1 hover:bg-yellow-600 hover:text-black transition-colors font-bold text-[10px]">RECHERCHER →</button>
+                  </form>
+                  {/* Raccourcis métiers */}
+                  <div className="flex flex-wrap gap-1 shrink-0 mb-1.5">
+                    {PJ_SHORTCUTS.map(s => (
+                      <button key={s} onClick={() => handlePagesJaunesSearch(undefined, s, pjWhere)}
+                        className="text-[8px] px-1.5 py-0.5 border border-yellow-800/40 hover:border-yellow-500 text-yellow-700 hover:text-yellow-400 rounded transition-colors">
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Recherches récentes */}
+                  {pjRecent.length > 0 && (
+                    <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                      <div className="text-[8px] opacity-30 mb-0.5 uppercase">Récents</div>
+                      {pjRecent.map((r, i) => (
+                        <button key={i} onClick={() => { setPjWhat(r.what); setPjWhere(r.where); handlePagesJaunesSearch(undefined, r.what, r.where); }}
+                          className="w-full text-left text-[9px] px-1.5 py-0.5 border border-yellow-900/20 hover:border-yellow-600 text-yellow-600/70 hover:text-yellow-400 transition-colors truncate flex items-center gap-1 mb-0.5">
+                          <Search size={7} className="flex-shrink-0" />
+                          {r.what}{r.where ? ` — ${r.where}` : ''}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-2">
+                  <Radio size={36} className="animate-pulse" />
+                  <p className="text-[10px] opacity-70 uppercase">Terminal ouvert</p>
+                  <p className="text-[9px] opacity-50 truncate max-w-full px-2">{pjWhat}{pjWhere ? ` · ${pjWhere}` : ''}</p>
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => handlePagesJaunesSearch(undefined, pjWhat, pjWhere)} className="text-[9px] border border-yellow-600 px-2 py-0.5 hover:bg-yellow-900/30">Relancer</button>
+                    <button onClick={() => setPjActive(false)} className="text-[9px] border border-yellow-900/40 px-2 py-0.5 hover:border-yellow-600 opacity-50 hover:opacity-100">Nouvelle</button>
+                  </div>
+                </div>
               )}
             </div>
           )}
+
         </div>
       </div>
     </div>
@@ -394,92 +548,132 @@ const RetroComputer = ({ computerThemeIndex, onUpdateTheme, canCustomize }) => {
 const RetroNotepad = ({ myId, initialData, myName, currentLevel, noteThemeIndex, appId }) => {
   const [activeTab, setActiveTab] = useState('J1');
   const [notes, setNotes] = useState(initialData || { J1: '', J2: '', J3: '' });
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [copied, setCopied] = useState(false);
   const timeoutRef = useRef(null);
+  const notesRef = useRef(notes); // Évite les stale closures dans le raccourci clavier
   const themeStyle = NOTEPAD_THEMES[noteThemeIndex % NOTEPAD_THEMES.length] || NOTEPAD_THEMES[0];
   const canCustomize = currentLevel.lvl >= 7;
 
+  useEffect(() => { notesRef.current = notes; }, [notes]);
   useEffect(() => { if (initialData) setNotes(initialData); }, [initialData]);
 
-  const handleNoteChange = (e) => {
-    const newVal = e.target.value;
-    const newNotes = { ...notes, [activeTab]: newVal };
-    setNotes(newNotes);
-    setIsSaving(true);
+  const saveNow = async (data) => {
+    const toSave = data !== undefined ? data : notesRef.current;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(async () => {
-      try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { [`notes`]: newNotes, lastActive: Date.now() });
-        setIsSaving(false);
-      } catch (err) { }
-    }, 1500);
+    setSaveStatus('saving');
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { notes: toSave, lastActive: Date.now() });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+  };
+
+  // Raccourci Ctrl+S / Cmd+S
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveNow(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []); // utilise notesRef — pas de stale closure
+
+  const handleNoteChange = (e) => {
+    const newNotes = { ...notes, [activeTab]: e.target.value };
+    setNotes(newNotes);
+    setSaveStatus('saving');
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => saveNow(newNotes), 1500);
   };
 
   const clearPage = async () => {
+    if (!(notes[activeTab] || '').trim()) return;
     playSound('eraser', false);
     const newNotes = { ...notes, [activeTab]: '' };
     setNotes(newNotes);
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { [`notes`]: newNotes, lastActive: Date.now() });
+    await saveNow(newNotes);
   };
 
   const cycleTheme = async () => {
     if (!canCustomize) return;
-    const nextIndex = (noteThemeIndex + 1) % NOTEPAD_THEMES.length;
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { noteThemeIndex: nextIndex });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', COLL_CURRENT, myId), { noteThemeIndex: (noteThemeIndex + 1) % NOTEPAD_THEMES.length });
   };
+
+  const copyTab = () => {
+    const text = notes[activeTab] || '';
+    if (!text.trim()) return;
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      playSound('click', false);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const charCount = (notes[activeTab] || '').length;
+  const lineCount = (notes[activeTab] || '').split('\n').length;
+  const saveIcon = saveStatus === 'saving'
+    ? <span className="animate-pulse opacity-50 text-[8px]">…</span>
+    : saveStatus === 'saved' ? <span className="text-green-400 text-[8px]">✓</span>
+    : saveStatus === 'error' ? <span className="text-red-400 text-[8px]" title="Erreur de sauvegarde">!</span>
+    : <Save size={9} className="opacity-30" />;
 
   return (
     <div
       className="w-full max-w-md h-80 rounded-lg border-2 flex flex-col font-mono overflow-hidden relative transform rotate-1 lg:mt-0 mt-8 backdrop-blur-md shadow-2xl"
-      style={{
-        backgroundColor: themeStyle.bg + 'E6',
-        borderColor: themeStyle.text,
-        boxShadow: `0 0 20px ${themeStyle.text}40`
-      }}
+      style={{ backgroundColor: themeStyle.bg + 'E6', borderColor: themeStyle.text, boxShadow: `0 0 20px ${themeStyle.text}40` }}
     >
+      {/* Barre titre */}
       <div className="h-8 bg-black/50 flex justify-between items-center px-2 border-b border-white/10 shrink-0">
         <div className="flex gap-1">
           {[...Array(3)].map((_, i) => <div key={i} className="w-1.5 h-4 bg-slate-500 rounded-full"></div>)}
         </div>
         <div className="flex items-center gap-2">
           {canCustomize && (
-            <button onClick={cycleTheme} className="text-[10px] uppercase font-bold text-white bg-white/20 px-2 py-1 rounded hover:bg-white/30 flex items-center gap-1">
-              <Settings size={10} /> Skin
+            <button onClick={cycleTheme} className="text-[9px] uppercase font-bold text-white bg-white/20 px-1.5 py-0.5 rounded hover:bg-white/30 flex items-center gap-1">
+              <Settings size={9} /> Skin
             </button>
           )}
-          <button onClick={clearPage} className="text-white hover:text-red-400 transition-colors" title="Effacer la page">
-            <Eraser size={14} />
+          <button onClick={copyTab} className={`transition-colors ${copied ? 'text-green-400' : 'text-white/50 hover:text-white'}`} title="Copier le contenu">
+            {copied ? <span className="text-[10px]">✓</span> : <FileText size={13} />}
+          </button>
+          <button onClick={clearPage} className="text-white/50 hover:text-red-400 transition-colors" title="Effacer la page">
+            <Eraser size={13} />
           </button>
         </div>
       </div>
 
+      {/* Onglets — un point indique qu'un onglet contient du texte */}
       <div className="flex bg-black/20 shrink-0">
-        {['J1', 'J2', 'J3'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 font-bold text-xs border-r border-white/10 transition-all ${activeTab === tab ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
-            style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}
-          >
-            {tab}
-          </button>
-        ))}
+        {['J1', 'J2', 'J3'].map(tab => {
+          const hasContent = !!(notes[tab] || '').trim();
+          return (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-1.5 font-bold text-[11px] border-r border-white/10 transition-all flex items-center justify-center gap-1 ${activeTab === tab ? 'opacity-100' : 'opacity-40 hover:opacity-70'}`}
+              style={{ color: themeStyle.text, backgroundColor: activeTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent' }}>
+              {tab}
+              {hasContent && <span className="w-1 h-1 rounded-full bg-current opacity-80 flex-shrink-0"></span>}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex-1 relative p-4 overflow-hidden">
+      {/* Zone de saisie */}
+      <div className="flex-1 relative p-3 overflow-hidden">
         <textarea
           value={notes[activeTab] || ''}
           onChange={handleNoteChange}
-          placeholder={`// Notes du ${activeTab}...`}
-          className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px] font-bold"
-          style={{
-            fontFamily: "'Courier New', Courier, monospace",
-            color: themeStyle.text,
-            textShadow: `0 0 2px ${themeStyle.text}40`
-          }}
+          placeholder={`Notes ${activeTab}… (Ctrl+S)`}
+          className="w-full h-full bg-transparent resize-none outline-none text-sm leading-[20px]"
+          style={{ fontFamily: "'Courier New', Courier, monospace", color: themeStyle.text, textShadow: `0 0 2px ${themeStyle.text}30` }}
+          spellCheck={false}
         />
-        <div className="absolute bottom-2 right-2 text-[10px] font-bold uppercase flex items-center gap-1">
-          {isSaving ? <span className="animate-pulse opacity-50" style={{ color: themeStyle.text }}>...</span> : <span className="flex items-center gap-1 opacity-70" style={{ color: themeStyle.text }}><Save size={10} /></span>}
+        {/* Barre de statut : compteur + indicateur de sauvegarde */}
+        <div className="absolute bottom-1.5 right-2 flex items-center gap-2" style={{ color: themeStyle.text }}>
+          <span className="opacity-25 text-[9px]">{lineCount}L · {charCount}c</span>
+          <span className="opacity-70">{saveIcon}</span>
         </div>
       </div>
     </div>
@@ -907,13 +1101,15 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   const [collaborators, setCollaborators] = useState([]);
   const [historyList, setHistoryList] = useState([]);
   const [viewMode, setViewMode] = useState('splash');
-  const [myPlayerId, setMyPlayerId] = useState(localStorage.getItem(`stranger_player_id_${config.id}`));
+  const [myPlayerId, setMyPlayerId] = useState(null);
 
-  const [loginStep, setLoginStep] = useState('NAME');
-  const [joinName, setJoinName] = useState('');
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [inactivityAlert, setInactivityAlert] = useState(false);
+  // Auth email/password
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [displayName, setDisplayName] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isMusicMuted, setIsMusicMuted] = useState(false);
@@ -937,11 +1133,8 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   const [showSuperAdminLogin, setShowSuperAdminLogin] = useState(false);
   const [superAdminCode, setSuperAdminCode] = useState('');
 
-  // États pour la gestion des utilisateurs
+  // Gestion des utilisateurs (admin)
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const [selectedUserForReset, setSelectedUserForReset] = useState(null);
-  const [newGeneratedPin, setNewGeneratedPin] = useState('');
-  const [resetSuccess, setResetSuccess] = useState(false);
 
   const isMutedRef = useRef(isMuted);
   const prevStatsRef = useRef({});
@@ -963,11 +1156,30 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
     }
   }, [viewMode, isMusicMuted]);
 
-  // --- AUTHENTIFICATION ---
+  // --- AUTHENTIFICATION FIREBASE ---
+  // Session persistée : reconnexion automatique au chargement
   useEffect(() => {
-    signInAnonymously(auth);
-    onAuthStateChanged(auth, u => setUser(u));
-  }, []);
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        const isAdmin = ADMIN_EMAILS.includes(firebaseUser.email);
+        if (isAdmin) {
+          // Email admin → accès direct à la vue admin sans profil joueur requis
+          setMyPlayerId(firebaseUser.uid);
+          setViewMode(prev => prev === 'splash' || prev === 'setup' ? 'admin' : prev);
+        } else {
+          const snap = await getDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, firebaseUser.uid));
+          if (snap.exists()) {
+            setMyPlayerId(firebaseUser.uid);
+            setViewMode(prev => prev === 'splash' || prev === 'setup' ? 'player' : prev);
+          }
+        }
+      } else {
+        setMyPlayerId(null);
+      }
+    });
+    return () => unsub();
+  }, [config.appId]);
 
   // --- CHARGEMENT DES DONNÉES (EN TEMPS RÉEL) ---
   useEffect(() => {
@@ -1073,58 +1285,67 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
 
   // --- ACTIONS UTILISATEUR ---
 
-  const handleJoin = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Logique simplifiée pour l'exemple (Login en 2 étapes dans le code original)
-    // ... (Reprendre la logique complète si nécessaire)
-  };
-
-  const handleJoinStep1 = (e) => {
-    e.preventDefault();
-    const name = joinName.trim();
-    if (!name) return;
-    playSound('click', isMuted);
-    const existing = collaborators.find(c => c.name.toLowerCase() === name.toLowerCase());
-    if (existing) setLoginStep('AUTH_PIN'); else setLoginStep('CREATE_PIN');
-  };
-
-  const handleJoinStep2 = async (e) => {
-    e.preventDefault();
-    if (pinInput.length !== 6) { setPinError("Le code doit faire 6 chiffres"); playSound('error', isMuted); return; }
-    playSound('click', isMuted);
-    const name = joinName.trim();
-    const now = Date.now();
-
-    if (loginStep === 'CREATE_PIN') {
-      const d = await addDoc(collection(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT), {
-        name, calls: 0, rdvs: 0, lifetimeRdvs: 0, powersUsed: 0, pin: pinInput, notes: { J1: '', J2: '', J3: '' }, createdAt: now, lastActive: now
-      });
-      setMyPlayerId(d.id);
-      localStorage.setItem(`stranger_player_id_${config.id}`, d.id);
-      setViewMode('player');
-      setLoginStep('NAME');
-      setPinInput('');
-    }
-    else if (loginStep === 'AUTH_PIN') {
-      const existing = collaborators.find(c => c.name.toLowerCase() === name.toLowerCase());
-      if (existing && existing.pin === pinInput) {
-        if (existing.lastActive && (now - existing.lastActive > INACTIVITY_LIMIT)) {
-          await updateDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, existing.id), { lifetimeRdvs: 0, lastActive: now });
-          setInactivityAlert(true);
-        } else {
-          await updateDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, existing.id), { lastActive: now });
-        }
-        setMyPlayerId(existing.id);
-        localStorage.setItem(`stranger_player_id_${config.id}`, existing.id);
-        setViewMode('player');
-        setLoginStep('NAME');
-        setPinInput('');
-      } else {
-        setPinError("Code Incorrect !");
-        playSound('error', isMuted);
-        setPinInput('');
+    if (!emailInput.trim() || !passwordInput) return;
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const cred = await signInWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+      const uid = cred.user.uid;
+      const isAdmin = ADMIN_EMAILS.includes(cred.user.email);
+      if (isAdmin) {
+        setMyPlayerId(uid);
+        playSound('unlock', isMuted);
+        setViewMode('admin');
+        setAuthLoading(false);
+        return;
       }
+      const playerRef = doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, uid);
+      const snap = await getDoc(playerRef);
+      if (snap.exists()) {
+        await updateDoc(playerRef, { lastActive: Date.now() });
+        setMyPlayerId(uid);
+        playSound('click', isMuted);
+        setViewMode('player');
+      } else {
+        // Compte Firebase OK mais pas de profil joueur pour cette équipe
+        setAuthMode('register');
+        setAuthError('Aucun profil trouvé — créez votre compte ci-dessous');
+      }
+    } catch (e) {
+      setAuthError(getFirebaseAuthError(e.code));
+      playSound('error', isMuted);
     }
+    setAuthLoading(false);
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!displayName.trim()) { setAuthError('Le nom est requis'); return; }
+    if (!emailInput.trim()) { setAuthError('L\'email est requis'); return; }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+      const uid = cred.user.uid;
+      const now = Date.now();
+      await setDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, uid), {
+        name: displayName.trim(),
+        email: emailInput.trim(),
+        uid,
+        calls: 0, rdvs: 0, lifetimeRdvs: 0, powersUsed: 0,
+        notes: { J1: '', J2: '', J3: '' },
+        createdAt: now, lastActive: now,
+      });
+      setMyPlayerId(uid);
+      playSound('unlock', isMuted);
+      setViewMode('player');
+    } catch (e) {
+      setAuthError(getFirebaseAuthError(e.code));
+      playSound('error', isMuted);
+    }
+    setAuthLoading(false);
   };
 
   const updateStats = async (id, field, delta) => {
@@ -1149,9 +1370,8 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
   };
 
   const confirmDelete = async () => {
-    if (deleteCode !== '240113') { alert("CODE ADMIN INCORRECT !"); return; }
     await deleteDoc(doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, playerToDelete.id));
-    if (playerToDelete.id === myPlayerId) { localStorage.removeItem(`stranger_player_id_${config.id}`); setMyPlayerId(null); setViewMode('setup'); }
+    if (playerToDelete.id === myPlayerId) { await signOut(auth); setMyPlayerId(null); setViewMode('setup'); }
     setPlayerToDelete(null); setDeleteCode('');
   };
 
@@ -1202,34 +1422,6 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
     } else {
       alert("Accès refusé.");
       setSuperAdminCode('');
-    }
-  };
-
-  const handleResetUserPin = (userId, userName) => {
-    // Générer un nouveau PIN aléatoire à 6 chiffres
-    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
-    setSelectedUserForReset({ id: userId, name: userName });
-    setNewGeneratedPin(newPin);
-    setResetSuccess(false);
-  };
-
-  const confirmPinReset = async () => {
-    try {
-      await updateDoc(
-        doc(db, 'artifacts', config.appId, 'public', 'data', COLL_CURRENT, selectedUserForReset.id),
-        { pin: newGeneratedPin }
-      );
-      playSound('coin', isMuted);
-      setResetSuccess(true);
-      // Garder la modale ouverte 3 secondes pour afficher le succès, puis fermer
-      setTimeout(() => {
-        setSelectedUserForReset(null);
-        setNewGeneratedPin('');
-        setResetSuccess(false);
-      }, 3000);
-    } catch (error) {
-      console.error('Erreur lors de la réinitialisation du PIN:', error);
-      alert('Erreur lors de la réinitialisation du PIN.');
     }
   };
 
@@ -1363,27 +1555,61 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
         </div>
       )}
 
-      {/* VIEW: SETUP (LOGIN) */}
+      {/* VIEW: SETUP (LOGIN / INSCRIPTION) */}
       {viewMode === 'setup' && (
         <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-md border border-red-900/30 p-8 rounded-2xl">
-            <h1 className="text-2xl font-black text-center mb-6 text-white">ACCÈS SÉCURISÉ</h1>
-            {loginStep === 'NAME' && (
-              <form onSubmit={handleJoinStep1} className="flex flex-col gap-4">
-                <input autoFocus type="text" value={joinName} onChange={e => setJoinName(e.target.value)} className="bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl" placeholder="NOM DE CODE" />
-                <button type="submit" disabled={!joinName.trim()} className="bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl">SUIVANT</button>
-              </form>
-            )}
-            {/* Steps CREATE_PIN and AUTH_PIN omitted for brevity but logic is same as before */}
-            {(loginStep === 'CREATE_PIN' || loginStep === 'AUTH_PIN') && (
-              <form onSubmit={handleJoinStep2} className="flex flex-col gap-4">
-                <div className="text-center text-white mb-2">{loginStep === 'CREATE_PIN' ? 'CRÉER UN CODE (6 CHIFFRES)' : 'ENTREZ VOTRE CODE'}</div>
-                <input autoFocus type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} className="bg-slate-950 border border-slate-700 text-white text-center text-xl p-4 rounded-xl tracking-[0.5em]" placeholder="------" />
-                {pinError && <div className="text-red-500 text-center">{pinError}</div>}
-                <button type="submit" className="bg-blue-600 text-white font-bold py-4 rounded-xl">VALIDER</button>
-              </form>
-            )}
-            <button onClick={() => setViewMode('splash')} className="w-full mt-4 text-slate-500 text-xs">Retour</button>
+          <div className="w-full max-w-md bg-slate-900/90 backdrop-blur-md border border-red-900/30 p-8 rounded-2xl shadow-2xl">
+            <h1 className="text-2xl font-black text-center mb-1 text-white uppercase tracking-widest">ACCÈS SÉCURISÉ</h1>
+            <p className="text-center text-slate-500 text-[10px] mb-6 uppercase tracking-widest">{config.title}</p>
+
+            {/* Toggle connexion / inscription */}
+            <div className="flex mb-6 bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+              <button onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                className={`flex-1 py-2.5 text-sm font-bold transition-colors ${authMode === 'login' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                CONNEXION
+              </button>
+              <button onClick={() => { setAuthMode('register'); setAuthError(''); }}
+                className={`flex-1 py-2.5 text-sm font-bold transition-colors ${authMode === 'register' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                CRÉER UN COMPTE
+              </button>
+            </div>
+
+            <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="flex flex-col gap-3">
+              {authMode === 'register' && (
+                <input
+                  autoFocus
+                  type="text"
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="NOM D'AFFICHAGE"
+                  className="bg-slate-950 border border-slate-700 text-white text-center p-4 rounded-xl uppercase tracking-widest"
+                />
+              )}
+              <input
+                autoFocus={authMode === 'login'}
+                type="email"
+                value={emailInput}
+                onChange={e => setEmailInput(e.target.value)}
+                placeholder="EMAIL"
+                className="bg-slate-950 border border-slate-700 text-white text-center p-4 rounded-xl"
+              />
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={e => setPasswordInput(e.target.value)}
+                placeholder="MOT DE PASSE"
+                className="bg-slate-950 border border-slate-700 text-white text-center p-4 rounded-xl tracking-widest"
+              />
+              {authError && <p className="text-red-400 text-center text-sm bg-red-900/20 p-2 rounded-lg">{authError}</p>}
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl mt-1 transition-colors"
+              >
+                {authLoading ? '...' : authMode === 'login' ? 'ENTRER' : 'CRÉER MON COMPTE'}
+              </button>
+            </form>
+            <button onClick={() => setViewMode('splash')} className="w-full mt-4 text-slate-500 text-xs hover:text-slate-300">Retour</button>
           </div>
         </div>
       )}
@@ -1404,7 +1630,7 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
             </div>
             <div className="flex gap-2 items-start relative z-50">
               <button onClick={() => setShowLeaderboard(true)} className="p-3 rounded-full border bg-slate-900 border-yellow-600 text-yellow-500"><Trophy size={28} /></button>
-              <button onClick={() => { localStorage.removeItem(`stranger_player_id_${config.id}`); setMyPlayerId(null); setViewMode('setup'); }} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400"><LogOut size={28} /></button>
+              <button onClick={() => { signOut(auth); setMyPlayerId(null); setViewMode('splash'); }} className="p-3 rounded-full border bg-slate-900 border-slate-700 text-slate-400"><LogOut size={28} /></button>
             </div>
           </div>
 
@@ -1468,102 +1694,35 @@ const StrangerPhoningGame = ({ config, onBack, onRequestSuperAdmin }) => {
                   <p className="text-lg">Aucun utilisateur inscrit</p>
                 </div>
               ) : (
-                collaborators.map((user, idx) => (
-                  <div key={user.id} className="bg-slate-800/80 p-4 rounded-lg flex items-center justify-between hover:bg-slate-800 transition-colors border border-slate-700/50">
+                collaborators.map((u, idx) => (
+                  <div key={u.id} className="bg-slate-800/80 p-4 rounded-lg flex items-center justify-between hover:bg-slate-800 transition-colors border border-slate-700/50">
                     <div className="flex items-center gap-4 flex-1">
                       <img
-                        src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(user.avatarSeed || user.name)}&backgroundColor=transparent`}
+                        src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(u.avatarSeed || u.name)}&backgroundColor=transparent`}
                         className="w-12 h-12 rounded border border-slate-600 bg-slate-700"
-                        alt={user.name}
+                        alt={u.name}
                       />
                       <div className="flex-1">
-                        <div className="font-bold text-white text-lg">{user.name}</div>
+                        <div className="font-bold text-white text-lg">{u.name}</div>
                         <div className="text-xs text-slate-400 flex items-center gap-3">
-                          <span>Dernière activité: {user.lastActive ? new Date(user.lastActive).toLocaleString('fr-FR') : 'Jamais'}</span>
+                          <span>{u.email || '—'}</span>
                           <span>•</span>
-                          <span className="text-blue-400">{getLevelInfo(user.lifetimeRdvs).name}</span>
+                          <span>Actif: {u.lastActive ? new Date(u.lastActive).toLocaleString('fr-FR') : 'Jamais'}</span>
+                          <span>•</span>
+                          <span className="text-blue-400">{getLevelInfo(u.lifetimeRdvs).name}</span>
                         </div>
                       </div>
-                      <div className="text-right mr-4">
-                        <div className="text-sm text-slate-400">Stats</div>
+                      <div className="text-right">
                         <div className="flex gap-3">
-                          <span className="text-blue-400 font-mono font-bold">{user.calls || 0} appels</span>
-                          <span className="text-red-400 font-mono font-bold">{user.rdvs || 0} RDV</span>
+                          <span className="text-blue-400 font-mono font-bold">{u.calls || 0} appels</span>
+                          <span className="text-red-400 font-mono font-bold">{u.rdvs || 0} RDV</span>
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleResetUserPin(user.id, user.name)}
-                      className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 shadow-lg"
-                    >
-                      <KeyRound size={16} />
-                      Réinitialiser PIN
-                    </button>
                   </div>
                 ))
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* PIN RESET CONFIRMATION MODAL */}
-      {selectedUserForReset && (
-        <div className="fixed inset-0 z-[400] bg-black/95 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-orange-600 p-8 rounded-2xl max-w-md w-full shadow-[0_0_100px_rgba(234,88,12,0.5)]">
-            {resetSuccess ? (
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="text-2xl font-black text-green-400 mb-2">PIN RÉINITIALISÉ !</h3>
-                <p className="text-slate-400">Le nouveau code a été enregistré.</p>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-2xl font-black text-white mb-4 flex items-center gap-2">
-                  <KeyRound className="text-orange-500" />
-                  RÉINITIALISER LE PIN
-                </h3>
-                <p className="text-white mb-2">
-                  Utilisateur: <span className="font-bold text-orange-400">{selectedUserForReset.name}</span>
-                </p>
-
-                <div className="bg-black border border-orange-600 p-6 rounded-xl mb-4 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-orange-900/20 to-red-900/20 animate-pulse"></div>
-                  <div className="relative z-10">
-                    <div className="text-xs text-slate-400 mb-2 uppercase font-bold text-center">Nouveau Code PIN</div>
-                    <div className="text-4xl font-mono text-orange-400 tracking-[0.5em] text-center font-black select-all cursor-pointer">
-                      {newGeneratedPin}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-orange-900/20 border border-orange-800 p-3 rounded-lg mb-6">
-                  <p className="text-orange-400 text-sm flex items-start gap-2">
-                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                    <span>Veuillez noter ce code et le communiquer à l'utilisateur. Il ne sera plus affiché après confirmation.</span>
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => { setSelectedUserForReset(null); setNewGeneratedPin(''); }}
-                    className="flex-1 bg-slate-700 hover:bg-slate-600 p-3 rounded-lg transition-colors font-bold"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={confirmPinReset}
-                    className="flex-1 bg-orange-600 hover:bg-orange-500 p-3 rounded-lg font-bold transition-colors shadow-lg"
-                  >
-                    Confirmer
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       )}
